@@ -152,7 +152,7 @@ Windows x64 单文件 EXE 使用 PyInstaller 构建：
 python -m PyInstaller --clean --noconfirm --distpath dist --workpath build build_tools/windows/build_x64.spec
 ```
 
-产物为 `dist/CXPurePlayer-v1.0.0-win-x64.exe`，实测约 **67 MB**（70,565,129 字节）。构建脚本在 `Analysis()` 后裁剪 PySide6 hook 全量收集但项目未使用的 25 项 Qt 二进制，仅保留运行所需的 QtCore / QtGui / QtWidgets 与 qwindows、qico、qjpeg、样式插件。如需应急恢复全量打包，可在构建前设置环境变量 `CXPUREPLAYER_KEEP_QT_ALL=1`。
+产物为 `dist/CXPurePlayer-v1.0.0-win-x64.exe`，实测约 **67 MB**（70,580,290 字节，内含 LGPLv3 / GPLv3 许可证文本）。构建脚本在 `Analysis()` 后裁剪 PySide6 hook 全量收集但项目未使用的 25 项 Qt 二进制，仅保留运行所需的 QtCore / QtGui / QtWidgets 与 qwindows、qico、qjpeg、样式插件。如需应急恢复全量打包，可在构建前设置环境变量 `CXPUREPLAYER_KEEP_QT_ALL=1`。
 
 ## 项目结构
 
