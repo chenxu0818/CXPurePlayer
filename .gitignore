@@ -1,0 +1,32 @@
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# 构建中间产物与发布产物（Release 由 CI 生成，不入库）
+build/
+dist/
+
+# libmpv DLL 由 CI 从 LGPL 上游构建下载，不入库
+bin/libmpv-2.dll
+
+# 运行时用户数据与日志
+log/
+record/
+recordings.json
+settings.ini
+*.log
+
+# 临时文件与测试产物
+*.tmp
+*.part
+tests/_*.png
+tests/_*.ts
+tests/_*.mp4
+
+# IDE / 系统文件
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
