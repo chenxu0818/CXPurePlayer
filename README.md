@@ -172,7 +172,7 @@ CXPurePlayer/
 
 ## 许可与第三方组件
 
-依赖组合采用 LGPL：LGPL 构建 libmpv + LGPL FFmpeg 组件 + PySide6 LGPLv3 + PyInstaller 打包例外，自有代码可闭源。详见 `THIRD_PARTY_NOTICES.md` 与 `CXPurePlayer-需求规格与设计方案.md` 第 6.6 节。
+**本项目源代码采用 LGPL-3.0-or-later 开源**（见根目录 `LICENSE`；LGPLv3 引用的 GPLv3 全文见 `LICENSE.GPL3`）。依赖组合同样为 LGPL：LGPL 构建 libmpv + LGPL FFmpeg 组件 + PySide6 LGPLv3 + PyInstaller 打包例外。详见 `THIRD_PARTY_NOTICES.md` 与 `CXPurePlayer-需求规格与设计方案.md` 第 6.6 节。
 
 主要第三方组件：
 
