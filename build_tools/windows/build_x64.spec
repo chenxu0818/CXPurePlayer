@@ -15,6 +15,8 @@ for relative, target in [
     ("app/resources/logo.png", "app/resources"),
     ("app/resources/icon.ico", "app/resources"),
     ("THIRD_PARTY_NOTICES.md", "."),
+    ("LICENSE", "."),
+    ("LICENSE.GPL3", "."),
 ]:
     source = os.path.join(_ROOT, relative.replace("/", os.sep))
     if os.path.exists(source):
