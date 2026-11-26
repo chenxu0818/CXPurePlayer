@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 from datetime import datetime, timedelta
 from typing import List
@@ -240,24 +241,22 @@ class RecordTasksDialog(QDialog):
         self.table.setAlternatingRowColors(False)
         self.table.itemSelectionChanged.connect(self._update_action_buttons)
         self.table.itemChanged.connect(self._on_item_changed)
+        # 点击数据行 = 切换该行勾选（与复选框一致），便于批量选择。
+        self.table.cellClicked.connect(self._on_cell_clicked)
         layout.addWidget(self.table, 1)
 
         actions = QHBoxLayout()
-        for attr, label, signal in (
-            ("stop_btn", "停止", self.taskStop),
-            ("cancel_btn", "取消", self.taskCancel),
-            ("edit_btn", "编辑", self.taskEdit),
-            ("delete_btn", "删除", None),
-            ("open_file_btn", "打开文件", self.taskOpenFile),
-            ("open_dir_btn", "打开目录", self.taskOpenDir),
+        # 每个按钮的启用规则统一由 _update_action_buttons() 依据勾选的任务集合决定。
+        for attr, label, handler in (
+            ("stop_btn", "停止", lambda: self._emit_checked(self.taskStop)),
+            ("cancel_btn", "取消", lambda: self._emit_checked(self.taskCancel)),
+            ("edit_btn", "编辑", lambda: self._emit_single(self.taskEdit)),
+            ("delete_btn", "删除", lambda: self._delete_selected()),
+            ("open_file_btn", "打开文件", lambda: self._emit_checked(self.taskOpenFile)),
+            ("open_dir_btn", "打开目录", lambda: self._open_dirs()),
         ):
             button = compact_button(QPushButton(tr(label)), m)
-            if signal is None:
-                button.clicked.connect(lambda _checked=False: self._delete_selected())
-            else:
-                button.clicked.connect(
-                    lambda _checked=False, target=signal: self._emit_selected(target)
-                )
+            button.clicked.connect(handler)
             setattr(self, attr, button)
             actions.addWidget(button)
         self.close_btn = compact_button(QPushButton(tr("关闭")), m)
@@ -381,23 +380,68 @@ class RecordTasksDialog(QDialog):
         self._sync_select_all()
         self._update_action_buttons()
 
-    def _update_action_buttons(self) -> None:
-        """停止按钮只对录制中任务可用；其余操作沿用内核状态校验。"""
-        task_id = self._current_task_id()
-        task = next((item for item in self._tasks if item.id == task_id), None)
-        self.stop_btn.setEnabled(
-            task is not None and task.status == TaskStatus.RECORDING.value
+    def _on_cell_clicked(self, row: int, column: int) -> None:
+        """点击数据行等价于点击复选框：再次点击取消选择。
+
+        点击复选框列本身交给 Qt 的 itemChanged 处理（避免双重翻转）；
+        点击其它列时手动翻转勾选状态，并让 itemChanged 触发按钮刷新。
+        """
+        if column == self.COL_SELECT:
+            return
+        item = self.table.item(row, self.COL_SELECT)
+        if item is None:
+            return
+        checked = item.checkState() == Qt.CheckState.Checked
+        item.setCheckState(
+            Qt.CheckState.Unchecked if checked else Qt.CheckState.Checked
         )
+
+    def _selected_tasks(self) -> list[RecordTask]:
+        ids = set(self.selected_task_ids())
+        return [task for task in self._tasks if task.id in ids]
+
+    def _update_action_buttons(self) -> None:
+        """按钮启用规则完全依据勾选集合，与当前焦点行无关。
+
+        - 未勾选任何任务：停止/取消/编辑/删除/打开文件/打开目录 全部禁用；
+        - 勾选多个任务：编辑禁用、打开目录仅在所有输出文件处于同一目录时可用；
+        - 勾选单个任务：按任务状态与输出文件决定是否可用。
+        """
+        tasks = self._selected_tasks()
+        count = len(tasks)
+        recording = any(task.status == TaskStatus.RECORDING.value for task in tasks)
+        dirs = {
+            os.path.dirname(task.output)
+            for task in tasks if task.output
+        }
+        self.stop_btn.setEnabled(count > 0 and recording)
+        self.cancel_btn.setEnabled(count > 0)
+        self.edit_btn.setEnabled(count == 1)
+        self.delete_btn.setEnabled(count > 0)
+        self.open_file_btn.setEnabled(count > 0)
+        self.open_dir_btn.setEnabled(count > 0 and len(dirs) == 1)
 
     def _delete_selected(self) -> None:
         ids = self.selected_task_ids()
-        if not ids:
-            current = self._current_task_id()
-            ids = [current] if current else []
         if ids:
             self.taskDeleteSelected.emit(ids)
 
-    def _emit_selected(self, signal: Signal) -> None:
-        task_id = self._current_task_id()
-        if task_id:
+    def _emit_checked(self, signal: Signal) -> None:
+        """对勾选的每个任务逐个发出信号（停止/取消/打开文件）。"""
+        for task_id in self.selected_task_ids():
             signal.emit(task_id)
+
+    def _emit_single(self, signal: Signal) -> None:
+        """仅当恰好勾选一个任务时发出信号（编辑）。"""
+        ids = self.selected_task_ids()
+        if len(ids) == 1:
+            signal.emit(ids[0])
+
+    def _open_dirs(self) -> None:
+        """打开目录：勾选任务输出文件同处一个目录时，打开该目录。"""
+        tasks = self._selected_tasks()
+        dirs = {os.path.dirname(task.output) for task in tasks if task.output}
+        if len(dirs) != 1:
+            return
+        # 用任一任务 id 触发；主窗口按该任务 output 的目录打开。
+        self.taskOpenDir.emit(tasks[0].id)
