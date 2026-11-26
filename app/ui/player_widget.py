@@ -62,8 +62,10 @@ class PlayerWidget(QFrame):
             event.acceptProposedAction()
 
     def mouseDoubleClickEvent(self, event) -> None:  # noqa: N802
-        self.doubleClicked.emit()
-        super().mouseDoubleClickEvent(event)
+        # 仅左键双击触发全屏；右键不做任何处理（也不交给父类）。
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.doubleClicked.emit()
+            super().mouseDoubleClickEvent(event)
 
     def wheelEvent(self, event: QWheelEvent) -> None:  # noqa: N802
         delta = event.angleDelta().y()
