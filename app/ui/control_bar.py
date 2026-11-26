@@ -69,10 +69,14 @@ class ControlBar(QWidget):
         self.setObjectName("controlPanel")
         self.m = metrics
         self._muted = False
+        self._live = False
+        self._has_media = False
         self._video_codec = ""
         self._audio_codec = ""
         self._build()
         self.apply_scale()
+        # 初始无媒体：播放/停止/快进/快退不可用，避免空点击报错。
+        self.set_has_media(False)
 
     def apply_scale(self) -> None:
         """控制栏整体高度约为原基准的 70%（34px @ 100%）。"""
@@ -159,6 +163,17 @@ class ControlBar(QWidget):
             self.play_btn._icon_name = name
             self.play_btn.refresh_icon()
 
+    def set_has_media(self, has_media: bool) -> None:
+        """无媒体时禁用播放/快进/快退/停止，避免空操作报错。
+
+        直播时快进/快退仍禁用；有媒体后按当前直播状态恢复快进/快退。
+        """
+        self._has_media = has_media
+        self.play_btn.setEnabled(has_media)
+        self.stop_btn.setEnabled(has_media)
+        self.rewind_btn.setEnabled(has_media and not self._live)
+        self.forward_btn.setEnabled(has_media and not self._live)
+
     def set_volume(self, volume: int, muted: bool) -> None:
         self._muted = muted
         self.volume_slider.blockSignals(True)
@@ -192,8 +207,10 @@ class ControlBar(QWidget):
         self.set_codecs(self._video_codec, self._audio_codec)
 
     def set_live(self, live: bool) -> None:
-        self.rewind_btn.setEnabled(not live)
-        self.forward_btn.setEnabled(not live)
+        self._live = live
+        # 直播禁用快进/快退；无媒体时同步禁用，避免空操作。
+        self.rewind_btn.setEnabled(self._has_media and not live)
+        self.forward_btn.setEnabled(self._has_media and not live)
         if live:
             self.time_label.setText("● LIVE")
 

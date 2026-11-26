@@ -868,6 +868,7 @@ class MainWindow(QMainWindow):
         self._live = False
         self._current_path = path
         self.player_widget.set_has_media(True)
+        self.control.set_has_media(True)
         self.player.open(path, start_pos=start_pos)
         self.playlist_panel.highlight(path)
         self.info_cache.probe_with_player(path, self.player)
@@ -882,18 +883,26 @@ class MainWindow(QMainWindow):
         self._live = True
         self._current_path = channel.url
         self.player_widget.set_has_media(True)
+        self.control.set_has_media(True)
         self.player.open(channel.url, live=True)
         self.control.set_live(True)
         self.osd.set_info(self.player.state, channel.name, {})
         self.info_cache.probe_with_player(channel.url, self.player, live=True)
         self.title_bar.set_media_name(f"{tr('直播')} · {channel.name}")
 
+    def _has_media(self) -> bool:
+        """是否已打开媒体（视频/音频/直播）。控制栏禁用之外，菜单/快捷键也据此拦截空操作。"""
+        return bool(getattr(self, "_current_path", ""))
+
     def _toggle_play(self) -> None:
+        if not self._has_media():
+            return
         self.player.play_pause()
 
     def _stop(self) -> None:
         self._save_playback_position()
         self.player.stop()
+        self.control.set_has_media(False)
         self.control.set_time(0, 0)
         self.title_bar.set_media_name("")
         self.progress.blockSignals(True)
@@ -903,9 +912,13 @@ class MainWindow(QMainWindow):
         self._update_status(tr("停止"))
 
     def _rewind(self) -> None:
+        if not self._has_media() or getattr(self, "_live", False):
+            return
         self.player.seek(-self.settings.seek_step, absolute=False)
 
     def _forward(self) -> None:
+        if not self._has_media() or getattr(self, "_live", False):
+            return
         self.player.seek(self.settings.seek_step, absolute=False)
 
     def _toggle_mute(self) -> None:
@@ -1335,6 +1348,11 @@ class MainWindow(QMainWindow):
         task, error = self.recorder.add_task(
             selected, values["content"], values["start_time"], values["end_time"],
             values["record_dir"], values["record_format"],
+            frequency=values.get("frequency", "once"),
+            weekdays=values.get("weekdays", ""),
+            custom_dates=values.get("custom_dates", ""),
+            time_start=values.get("time_start", ""),
+            time_end=values.get("time_end", ""),
         )
         if error:
             QMessageBox.warning(self, tr("错误"), error)
@@ -1365,7 +1383,10 @@ class MainWindow(QMainWindow):
                               self.metrics, task=task, parent=self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        error = self.recorder.update_task(task_id, **dialog.values)
+        values = dict(dialog.values)
+        # 对话框用 name 表示频道名，内核字段为 channel。
+        values["channel"] = values.pop("name", task.channel)
+        error = self.recorder.update_task(task_id, **values)
         if error:
             QMessageBox.warning(self, tr("提示"), error)
 

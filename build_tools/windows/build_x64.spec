@@ -94,7 +94,7 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(
     pyz, a.scripts, a.binaries, a.zipfiles, a.datas, [],
-    name='CXPurePlayer-v1.0.1-win-x64',
+    name='CXPurePlayer-v1.0.2-win-x64',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

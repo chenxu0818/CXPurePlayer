@@ -111,6 +111,24 @@ class TaskStatus(str, Enum):
     FAILED = "失败"
 
 
+# 录制频率取值（英文源文案，界面显示经 i18n 翻译）
+FREQ_ONCE = "once"
+FREQ_DAILY = "daily"
+FREQ_WEEKLY = "weekly"
+FREQ_CUSTOM = "custom"
+FREQUENCIES = (FREQ_ONCE, FREQ_DAILY, FREQ_WEEKLY, FREQ_CUSTOM)
+
+
+def frequency_label(freq: str) -> str:
+    """频率英文 key -> 中文源文案（供记录与日志，界面用 tr 再翻译）。"""
+    return {
+        FREQ_ONCE: "单次",
+        FREQ_DAILY: "每日",
+        FREQ_WEEKLY: "每周",
+        FREQ_CUSTOM: "自定义",
+    }.get(freq, "单次")
+
+
 @dataclass
 class Channel:
     name: str
@@ -141,7 +159,7 @@ class RecordTask:
     channel: str
     url: str = ""
     content: str = ""
-    start_time: str = ""  # yyyy-MM-dd HH:mm
+    start_time: str = ""  # yyyy-MM-dd HH:mm（单次=计划时刻；循环=下次具体发生时点）
     end_time: str = ""
     created_at: str = ""  # yyyy-MM-dd HH:mm:ss 任务创建时刻
     record_dir: str = ""
@@ -153,6 +171,17 @@ class RecordTask:
     stopped_ts: int = 0
     size: int = 0
     actual_start: str = ""
+    # 录制频率：once=单次 / daily=每日 / weekly=每周 / custom=自定义日期
+    frequency: str = "once"
+    # 每周重复的星期，逗号分隔 0-6（0=周一 … 6=周日），如 "0,2,4"
+    weekdays: str = ""
+    # 自定义日期，逗号分隔 yyyy-MM-dd，最多 5 个
+    custom_dates: str = ""
+    # 循环任务的每日开始/结束时刻 HH:mm（start_time/end_time 保存下次具体日期时间）
+    time_start: str = ""
+    time_end: str = ""
+    # 循环任务已执行的次数（用于生成不重复的输出文件名与进度展示）
+    run_index: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

@@ -126,13 +126,14 @@ def check_record_tasks(app) -> None:
                   and panel.delete_btn.fontMetrics().horizontalAdvance(panel.delete_btn.text())
                   < panel.delete_btn.width())
 
-        # 2c. 录制任务窗口：三个长文案按钮三语等宽且文字完整；7 列含选择/创建时间、无操作列
+        # 2c. 录制任务窗口：三个长文案按钮三语等宽且文字完整；8 列含选择/创建时间/录制频率、无操作列
         dlg = window.tasks_dialog
         headers = [dlg.table.horizontalHeaderItem(i).text()
                    for i in range(dlg.table.columnCount())]
-        check("录制任务表新增选择与创建时间列、去掉操作列",
-              dlg.table.columnCount() == 7
+        check("录制任务表新增选择、创建时间与录制频率列、去掉操作列",
+              dlg.table.columnCount() == 8
               and tr("选择") in headers and tr("创建时间") in headers
+              and tr("录制频率") in headers
               and tr("操作") not in headers, str(headers))
         check("录制任务窗口已加宽", dlg.width() >= 1100 and dlg.minimumWidth() >= 970,
               f"{dlg.width()}/{dlg.minimumWidth()}")
@@ -157,11 +158,13 @@ def check_record_tasks(app) -> None:
         channels = [Channel(name="测试台", url=video, group="测试")]
         window.iptv_panel.set_channels(channels)
         dialog = RecordDialog(window.settings, channels, window.metrics, parent=window)
-        check("电视台下拉不可编辑", not dialog.channel.isEditable())
+        check("电视台下拉不可编辑", not dialog.channel_combo.isEditable())
+        check("分组下拉包含测试分组",
+              "测试" in [dialog.group_combo.itemText(i) for i in range(dialog.group_combo.count())])
         check("电视台选项来自频道列表",
-              dialog.channel.count() == 1
-              and isinstance(dialog.channel.itemData(0), Channel)
-              and dialog.channel.itemData(0).url == video)
+              dialog.channel_combo.count() == 1
+              and isinstance(dialog.channel_combo.itemData(0), Channel)
+              and dialog.channel_combo.itemData(0).url == video)
         QMessageBox.warning = lambda *args, **kwargs: warnings.append(args) or QMessageBox.StandardButton.Ok
         empty = RecordDialog(window.settings, [], window.metrics, parent=window)
         empty._on_ok()
@@ -181,7 +184,7 @@ def check_record_tasks(app) -> None:
 
         # 4. 菜单新建任务真正写入列表（原 dialog.Accepted 会抛 AttributeError）
         def fake_exec(self):
-            self.channel.setCurrentIndex(0)
+            self.channel_combo.setCurrentIndex(0)
             self.start.setDateTime(QDateTime.currentDateTime().addSecs(-60))
             self.end.setDateTime(QDateTime.currentDateTime().addSecs(120))
             self.directory.setText(os.path.join(tmp, "out"))
@@ -373,12 +376,15 @@ def main() -> None:
           f"before={video_h}, after={window.player_widget.height()}")
 
     calls = {"n": 0}
+    # v1.0.2：无媒体时播放/暂停被守卫拦截，测试需先置位媒体状态。
+    window._current_path = "dummy-media"
     original_toggle = window.player.play_pause
     window.player.play_pause = lambda: calls.__setitem__("n", calls["n"] + 1)
     QTest.keyClick(window, Qt.Key.Key_Space)
     app.processEvents()
     check("全屏 Space 播放/暂停", calls["n"] == 1, str(calls["n"]))
     window.player.play_pause = original_toggle
+    # 保留媒体状态，供后续左右键快进快退快捷键测试使用。
 
     QTest.keyClick(window, Qt.Key.Key_Return)
     app.processEvents()
