@@ -43,6 +43,110 @@ class MpvPlayer(QObject):
         self._external_audio_index = 0
         self._external_sub_index = 0
 
+    @staticmethod
+    def _log_dll_diagnostics(exc: Exception) -> None:
+        """DLL 加载失败时记录完整异常链、原生 WinError 与依赖逐个加载结果，定位根因。"""
+        import platform
+        import traceback
+        import ctypes
+        log_error("[DLL诊断] ===== libmpv 加载失败诊断开始 =====")
+        log_error(f"[DLL诊断] 系统: {platform.platform()} | {platform.machine()} | Python {platform.python_version()}")
+        log_error(f"[DLL诊断] 冻结打包: {getattr(sys, 'frozen', False)} | _MEIPASS={getattr(sys, '_MEIPASS', '')}")
+        log_error(f"[DLL诊断] DLL 搜索目录: {_BIN_DIR}")
+        log_error(f"[DLL诊断] 外层异常: {type(exc).__name__}: {exc}")
+        # 挖完整异常链（PyInstaller hook 会包一层 PyInstallerImportError，原生
+        # FileNotFoundError / WinError 藏在 __cause__ 里，深挖才能拿到真实错误码）
+        seen: set = set()
+        cur = exc
+        depth = 0
+        while cur is not None and id(cur) not in seen:
+            seen.add(id(cur))
+            log_error(
+                f"[DLL诊断] 异常链[{depth}] {type(cur).__name__}: "
+                f"winerror={getattr(cur, 'winerror', None)} errno={getattr(cur, 'errno', None)} :: {str(cur)[:260]}"
+            )
+            cur = getattr(cur, "__cause__", None) or getattr(cur, "__context__", None)
+            depth += 1
+        log_error(f"[DLL诊断] 完整 traceback:\n{traceback.format_exc()}")
+
+        dll_path = os.path.join(_BIN_DIR, "libmpv-2.dll")
+        exists = os.path.isfile(dll_path)
+        try:
+            size = os.path.getsize(dll_path) if exists else -1
+        except Exception:
+            size = -2
+        log_error(f"[DLL诊断] DLL 存在={exists} 大小={size} 路径={dll_path}")
+        log_error(f"[DLL诊断] 路径纯ASCII={all(ord(c) < 128 for c in dll_path)}")
+
+        # 用原始 kernel32.LoadLibraryExW 绕过 PyInstaller 的 CDLL hook，拿真实错误码。
+        # 同时对 libmpv 的关键依赖逐个加载，直接定位缺失/损坏的那一个。
+        try:
+            k32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+            k32.LoadLibraryExW.restype = ctypes.c_void_p
+            k32.LoadLibraryExW.argtypes = [ctypes.c_wchar_p, ctypes.c_void_p, ctypes.c_uint32]
+            k32.FreeLibrary.argtypes = [ctypes.c_void_p]
+            k32.FreeLibrary.restype = ctypes.c_int
+            flag_sets = [
+                ("PLAIN", 0),
+                ("ALTERED_SEARCH", 0x00000008),
+                ("MPV_FLAGS", 0x00001000 | 0x00000100),
+            ]
+            for label, flags in flag_sets:
+                ctypes.set_last_error(0)
+                handle = k32.LoadLibraryExW(dll_path, None, flags)
+                err = ctypes.get_last_error()
+                log_error(f"[DLL诊断] LoadLibraryExW[{label}] handle={handle} GetLastError={err}")
+                if handle:
+                    k32.FreeLibrary(handle)
+
+            # libmpv-2.dll 的实际依赖（pefile 从随包 DLL 导入表提取）
+            deps = (
+                "GDI32.dll ole32.dll USER32.dll VERSION.dll vulkan-1.dll ADVAPI32.dll "
+                "KERNEL32.dll OLEAUT32.dll api-ms-win-core-winrt-l1-1-0.dll AVRT.dll "
+                "dwmapi.dll IMM32.dll api-ms-win-core-path-l1-1-0.dll SHCORE.dll "
+                "UxTheme.dll WINMM.dll api-ms-win-core-winrt-error-l1-1-1.dll SHELL32.dll "
+                "OPENGL32.dll api-ms-win-crt-stdio-l1-1-0.dll api-ms-win-crt-runtime-l1-1-0.dll "
+                "bcrypt.dll SHLWAPI.dll WS2_32.dll DWrite.dll Secur32.dll IPHLPAPI.DLL "
+                "WLDAP32.dll CRYPT32.dll api-ms-win-core-synch-l1-2-0.dll ntdll.dll "
+                "bcryptprimitives.dll AVICAP32.dll SETUPAPI.dll Normaliz.dll d2d1.dll"
+            ).split()
+            failed_deps = []
+            for dep in deps:
+                ctypes.set_last_error(0)
+                hdep = k32.LoadLibraryExW(dep, None, 0)
+                if not hdep:
+                    failed_deps.append(f"{dep}(err={ctypes.get_last_error()})")
+                else:
+                    k32.FreeLibrary(hdep)
+            log_error(f"[DLL诊断] 依赖加载失败: {failed_deps if failed_deps else 'NONE'}")
+        except Exception as de:
+            log_error(f"[DLL诊断] Win32 API 诊断出错: {type(de).__name__}: {de}")
+
+        # 测试把 DLL 复制到纯 ASCII 短路径后能否加载（区分杀软拦截 Temp/中文路径 vs 依赖缺失）
+        try:
+            import shutil
+            # 选一个人人可写、纯 ASCII 的目录（Public 优先，回退系统 Temp）
+            public = os.environ.get("PUBLIC", "C:\\Users\\Public")
+            ascii_dir = os.path.join(public, "cxmpvdiag")
+            if not os.access(public, os.W_OK):
+                ascii_dir = os.path.join(os.environ.get("SystemRoot", "C:\\Windows"), "Temp", "cxmpvdiag")
+            os.makedirs(ascii_dir, exist_ok=True)
+            ascii_dll = os.path.join(ascii_dir, "libmpv-2.dll")
+            shutil.copyfile(dll_path, ascii_dll)
+            k32b = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+            k32b.LoadLibraryExW.restype = ctypes.c_void_p
+            k32b.LoadLibraryExW.argtypes = [ctypes.c_wchar_p, ctypes.c_void_p, ctypes.c_uint32]
+            ctypes.set_last_error(0)
+            h_ascii = k32b.LoadLibraryExW(ascii_dll, None, 0x00000008)
+            log_error(
+                f"[DLL诊断] ASCII短路径加载: path={ascii_dll} handle={h_ascii} "
+                f"GetLastError={ctypes.get_last_error()}"
+            )
+        except Exception as de:
+            log_error(f"[DLL诊断] ASCII短路径测试出错: {type(de).__name__}: {de}")
+
+        log_error("[DLL诊断] ===== 诊断结束 =====")
+
     # ---------- 生命周期 ----------
     @property
     def available(self) -> bool:
@@ -60,9 +164,9 @@ class MpvPlayer(QObject):
         try:
             import mpv  # type: ignore
         except Exception as exc:
+            self._log_dll_diagnostics(exc)
             self.errorOccurred.emit(
-                f"未找到 libmpv-2.dll。已将路径加入搜索：{_BIN_DIR}\n"
-                f"请把 LGPL 构建的 libmpv-2.dll 放入该目录（源码模式为项目 bin 目录）。\n{exc}"
+                f"libmpv 内核加载失败（详见 log 目录日志）。\n{exc}"
             )
             self.readyChanged.emit(False)
             return False
