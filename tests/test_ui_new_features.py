@@ -209,7 +209,7 @@ def check_record_tasks(app) -> None:
         dlg = window.tasks_dialog
         dlg.table.selectRow(0)
         app.processEvents()
-        check("等待中任务停止按钮禁用", not dlg.stop_btn.isEnabled(),
+        check("未勾选任务-停止按钮禁用", not dlg.stop_btn.isEnabled(),
               f"status={task.status}")
 
         # 5. 到点真正开录并生成文件
@@ -224,8 +224,10 @@ def check_record_tasks(app) -> None:
               and os.path.getsize(task.output) > 0, str(task.output))
         dlg.set_tasks(list(window.recorder.tasks))
         dlg.table.selectRow(0)
+        # 新规则：停止按钮依据勾选集合（点击数据行=勾选）
+        dlg.table.cellClicked.emit(0, dlg.COL_CHANNEL)
         app.processEvents()
-        check("录制中任务停止按钮可用", dlg.stop_btn.isEnabled())
+        check("勾选录制中任务-停止按钮可用", dlg.stop_btn.isEnabled())
         window.recorder.stop_task(task.id)
         app.processEvents()
 
