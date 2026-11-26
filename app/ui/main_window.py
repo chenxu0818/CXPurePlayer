@@ -766,16 +766,63 @@ class MainWindow(QMainWindow):
             log_info(f"[启动] readyChanged 后播放排队文件 {len(paths)} 个: {paths}")
             self._open_paths(paths)
 
+    @staticmethod
+    def _sibling_videos(paths: list[str]) -> list[str]:
+        """打开视频时，把文件所在目录下的全部视频一起加入播放列表。
+
+        列表按文件名顺序展示，当前播放文件不再置顶（仍由 highlight 高亮）。
+        去重使用规范化绝对路径作为 key——正斜杠 / 与反斜杠 \\、大小写差异
+        都指向同一文件，否则当前播放视频会被重复加入。
+        """
+        def key(p: str) -> str:
+            return os.path.normcase(os.path.abspath(p))
+
+        folders: list[str] = []
+        for path in paths:
+            if path and os.path.isfile(path):
+                folder = os.path.dirname(os.path.abspath(path))
+                if folder not in folders:
+                    folders.append(folder)
+
+        # 按目录、文件名顺序统一收集；用规范化 key 去重
+        result: list[str] = []
+        seen: set[str] = set()
+        for folder in folders:
+            try:
+                names = sorted(os.listdir(folder))
+            except OSError:
+                continue
+            for name in names:
+                full = os.path.join(folder, name)
+                k = key(full)
+                if (os.path.isfile(full)
+                        and os.path.splitext(name)[1].lower() in PlayerWidget.VIDEO_EXTS
+                        and k not in seen):
+                    seen.add(k)
+                    result.append(full)
+
+        # 非本地路径（URL 等）无法归入目录扫描，原样追加在前，保证不丢失
+        for path in paths:
+            if path and not os.path.isfile(path) and key(path) not in seen:
+                seen.add(key(path))
+                result.append(path)
+        return result
+
     def _open_paths(self, paths: list[str], play: bool | None = True) -> None:
         if not paths:
             return
         had_media = bool(getattr(self, "_current_path", ""))
-        self.playlist_panel.add_paths(paths)
+        # 播放目标始终是用户实际打开的第一个文件，与列表展示顺序无关
+        target = paths[0]
+        # 打开/拖放/文件关联：把本地视频所在目录的全部视频一并入列（按文件名排序）；
+        # play=None（播放列表「添加文件」）不扩展，避免每次添加都带上整目录。
+        listing = self._sibling_videos(paths) if play is True else paths
+        self.playlist_panel.add_paths(listing)
         self.playlist = self.playlist_panel.paths
         # play=True（打开/拖放）：无论当前是否已有视频都立即切换；
         # play=None（加入播放列表）：已有视频时只入列，空闲时才自动播放。
         if play is True or (play is None and not had_media):
-            self._play_path(paths[0])
+            self._play_path(target)
 
     def _save_playback_position(self) -> None:
         """保存当前本地文件的播放位置；仅在开启设置且确实播放过时写入。"""
