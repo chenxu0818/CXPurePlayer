@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from typing import Optional, Tuple
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QStandardPaths, QTimer, QUrl
 from PySide6.QtWidgets import (
     QDialog, QFileDialog, QFormLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QSplitter, QVBoxLayout, QWidget,
@@ -69,7 +69,31 @@ def prepare_file_dialog(dialog: QFileDialog, metrics, width: int = 920, height: 
         QTimer.singleShot(
             0, lambda: splitter.setSizes([sidebar_width, max(metrics.s(400), dialog.width() - sidebar_width)])
         )
+    _add_desktop_shortcut(dialog)
     return dialog
+
+
+def _add_desktop_shortcut(dialog: QFileDialog) -> None:
+    """左侧导航栏在 Qt 默认的「我的电脑 / 用户」之外补一个「桌面」快捷项。
+
+    延迟到事件循环再设置，确保侧边栏模型已初始化。
+    """
+    desktop = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DesktopLocation)
+    if not desktop:
+        return
+    desktop_url = QUrl.fromLocalFile(desktop)
+    QTimer.singleShot(0, lambda: _ensure_sidebar_url(dialog, desktop_url))
+
+
+def _ensure_sidebar_url(dialog: QFileDialog, url: QUrl) -> None:
+    """把 url 追加进文件对话框侧边栏（已存在则不重复添加）。"""
+    try:
+        urls = list(dialog.sidebarUrls())
+        if url not in urls:
+            urls.append(url)
+            dialog.setSidebarUrls(urls)
+    except Exception:
+        pass
 
 
 def get_open_files(
@@ -81,6 +105,7 @@ def get_open_files(
         prepare_file_dialog(dialog, metrics)
     else:
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+        _add_desktop_shortcut(dialog)
     dialog.setFileMode(QFileDialog.FileMode.ExistingFiles)
     if name_filter:
         dialog.setNameFilter(name_filter)
@@ -102,6 +127,7 @@ def get_save_file(
         prepare_file_dialog(dialog, metrics)
     else:
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+        _add_desktop_shortcut(dialog)
     dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
     dialog.setFileMode(QFileDialog.FileMode.AnyFile)
     if name_filter:
@@ -133,6 +159,7 @@ def get_existing_directory(
         prepare_file_dialog(dialog, metrics)
     else:
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+        _add_desktop_shortcut(dialog)
     dialog.setFileMode(QFileDialog.FileMode.Directory)
     dialog.setOption(QFileDialog.Option.ShowDirsOnly, True)
     if directory:
