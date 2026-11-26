@@ -7,9 +7,10 @@ import os
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel,
-    QLineEdit, QPushButton, QSpinBox, QVBoxLayout,
+    QLineEdit, QMessageBox, QPushButton, QSpinBox, QVBoxLayout,
 )
 
+from ..core import autostart
 from ..core.i18n import LANGUAGES, tr
 from ..core.settings import default_record_dir
 from ..core.theme import THEME_CHOICES
@@ -123,6 +124,10 @@ class SettingsDialog(QDialog):
         self.remember.setChecked(bool(self.settings.get("remember_position", False)))
         form.addRow("", self.remember)
 
+        self.autostart = QCheckBox(tr("开机自启动"))
+        self.autostart.setChecked(autostart.is_enabled())
+        form.addRow("", self.autostart)
+
         layout.addLayout(form)
         self.ok_btn = compact_button(QPushButton(tr("确定")), m)
         self.ok_btn.setObjectName("primaryButton")
@@ -164,6 +169,7 @@ class SettingsDialog(QDialog):
                 break
         self.retry.setValue(int(defaults["record_retry_interval"]))
         self.remember.setChecked(bool(defaults["remember_position"]))
+        self.autostart.setChecked(False)
 
     def _on_ok(self) -> None:
         self.settings.language = self.language.currentData()
@@ -176,6 +182,9 @@ class SettingsDialog(QDialog):
         self.settings.record_format = self.record_format.currentData()
         self.settings.record_retry_interval = self.retry.value()
         self.settings.set("remember_position", self.remember.isChecked())
+        error = autostart.set_enabled(self.autostart.isChecked())
+        if error:
+            QMessageBox.warning(self, tr("提示"), f"{tr('设置开机自启动失败')}：{error}")
         self.applied.emit()
         self.accept()
 
