@@ -1,7 +1,7 @@
 # CXPurePlayer 需求规格与设计方案
 
-> 文档版本：v1.1.32（需求稿；产品基线版本 v1.0.0）  
-> 日期：2026-11-23  
+> 文档版本：v1.1.35（需求稿；当前产品版本 v1.0.1，基线版本 v1.0.0）  
+> 日期：2026-11-25  
 > 项目目录：`D:\app\CXPurePlayer`  
 > 参考项目：`D:\app\cx-video-cutter`（主题、语言、设置、日志体系）
 
@@ -40,7 +40,6 @@
 | v1.1.16 | **v1.0.0 打磨第二十二轮**：播放记录增加 30 天自动过期策略（用户确认方案）。位置值由纯秒数改为 `秒数\|最后播放时间戳`，`get_playback_position()` 惰性判断过期并同步删除；新增 `purge_expired_positions()` 在主窗口启动时批量清理超过 30 天未再播放的记录，避免用户不再打开的文件永久滞留 ini。解析兼容旧版纯秒数格式（视为不过期）。测试覆盖过期读取失效、读取即删、启动批量清理、新鲜记录保留与旧格式兼容                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | v1.1.17 | **EXE 瘦身方案 1（Qt 二进制裁剪）**：`build_x64.spec` 在 `Analysis` 之后按文件名黑名单过滤 `a.binaries`，剔除 PySide6 hook 全量收集但项目未使用的 25 项二进制（`opengl32sw.dll`、Qt6Quick/Qml/QmlModels/QmlMeta/QmlWorkerScript/Pdf/Svg/Network/OpenGL/VirtualKeyboard，以及 qdirect2d/qminimal/qoffscreen 平台插件、qsvgicon/qgif/qicns/qpdf/qsvg/qtga/qtiff/qwbmp/qwebp 图片插件、qtuiotouch/qtvirtualkeyboard 插件）。先用 PE 导入表确认 Qt6Core/Qt6Gui/Qt6Widgets 及三个 .pyd 只互相依赖，核心运行链完整保留；保留 qwindows.dll、qico.dll、qjpeg.dll、qmodernwindowsstyle.dll。环境变量 `CXPUREPLAYER_KEEP_QT_ALL=1` 可一键回退。实测 EXE 由 89,443,109 字节降至 70,565,129 字节（−18.02 MB / −21.1%），Qt 类别体积 24.12 → 14.33 MB；全量回归测试通过，真实 EXE 启动、主窗口渲染、Ctrl+O 文件对话框（「选择视频文件」）正常                                         |
 | v1.1.18 | **功能描述对齐实际实现（全文核查修订）**：逐项对照源码修正正文中滞后于实现的描述——①头部「一句话定义/设计目标/非目标」与功能清单：文件关联已实现，从远期目标移入已交付；F23 记忆播放位置已交付（P0），补 30 天过期策略；F10 播放信息面板已并入 Tab OSD；F17 截图格式设为规划项（当前强制 PNG）。②4.1 播放速度入口改为标题栏倍速徽标 + Tab OSD（属性页无播放信息页），文件关联按已实现描述；4.2 轨道勾选标识、标签格式、外挂能力按实际；4.3 属性信息改为单页只读文本（General/Video/Audio/Text/Chapters）+「复制/关闭」，来源以 libmpv 为主、ffprobe 兜底（未随包），入口改「视图 → 属性信息」。③4.4 控制栏补效果(OSD)按钮、进度条章节标记与窗口拖动；4.5 播放列表标注未实现项；4.6 截图目录/格式/字幕选项按实际；4.7 关于对话框、设置项状态、日志实现按实际；4.8 快捷键补全实际清单；4.9 Tab OSD 改为不透明圆角浮层（无边框）；4.10 录制去掉 FLV/立即录制/批量等未实现项、频道管理按实际；新增 4.12 无边框窗口交互（拖动/缩放/比例填充）。④第 5/6/7/8/9/10 章界面图、技术选型、模块结构、体积估算（改为实测 67 MB）、构建、验收、决策与版本规划同步更新                                                                               |
-| v1.1.33 | **开源协议落地与许可证随包分发**：本项目源代码正式采用 LGPL-3.0-or-later（根目录 `LICENSE` + `LICENSE.GPL3`），README / 第三方声明 / 本文档 6.6 节全部同步；`build_x64.spec` 的 `datas` 加入两份许可证，重新打包 EXE 内嵌 `LICENSE`（LGPLv3 7652 B）与 `LICENSE.GPL3`（GPLv3 35149 B）。实测产物 70,580,527 字节，SHA256 `3ed34170…82cc2a`，启动冒烟正常；GitHub 仓库自动识别协议为 LGPL-3.0                                                                                                                                                                                                                                                                                 |
 
 | v1.1.19 | **分辨率自适应下限统一为 720p**：需求正文、技术选型、验收标准、版本规划与 README 全部改为 720p ~ 6K；`ui_scale.py` 自动分档移除低于 720p 的档位，逻辑分辨率低于 720p 时按 720p 档处理，不再额外缩小 UI                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
@@ -70,7 +69,12 @@
 
 | v1.1.32 | **直播流扫描方式修复**：① 播放 IPTV / 直播 URL 时 Tab OSD 与属性窗口原本不显示「扫描方式」——根因是首次探测发生在首帧之前、轨道为空而退到 ffprobe，ffprobe 结果未解析 `field_order` 且异步返回后覆盖了 mpv 的正确快照。② `parse_probe()` 新增 `field_order → Progressive / Interlaced (top/bottom field first)` 映射；`MediaInfoCache.probe_with_player()` 在开始新探测时取消并等待仍在运行的旧 ffprobe worker；直播 `playback-restart` 后防抖重探一次媒体信息。③ 新增专项回归：三语 field_order 映射、ffprobe 回退解析、旧 worker 取消、真实本地 HTTP 直播流端到端（Tab OSD 与属性窗口均显示 Scan type），全套 7 项测试通过 |
 
-> 版本号统一采用 **v主版本.次版本.修订号**（如 `v1.0.0`）；产品首个发布版本为 `v1.0.0`，文档修订号独立递增至 **v1.1.32**。EXE 固定版本资源为 `1.0.0.0`，字符串版本显示为 `v1.0.0`。
+| v1.1.33 | **开源协议落地与许可证随包分发**：本项目源代码正式采用 LGPL-3.0-or-later（根目录 `LICENSE` + `LICENSE.GPL3`），README / 第三方声明 / 本文档 6.6 节全部同步；`build_x64.spec` 的 `datas` 加入两份许可证，重新打包 EXE 内嵌 `LICENSE`（LGPLv3 7652 B）与 `LICENSE.GPL3`（GPLv3 35149 B）。实测产物 70,580,527 字节，SHA256 `3ed34170…82cc2a`，启动冒烟正常；GitHub 仓库自动识别协议为 LGPL-3.0                                                                                                                                                                                                                                                                                 |
+
+| v1.1.34 | **产品版本升级与六项交互增强**：① 录制任务弹窗改为勾选式操作——点击数据行即勾选、再次点击取消；未勾选时停止/取消/编辑/删除/打开文件/打开目录全部禁用；多选禁用编辑，打开目录仅在所有选中任务输出文件同目录时可用；按钮启用规则统一基于勾选集合（新增 `selected_task_ids()` 派生 `_selected_tasks()`），新增 `_on_cell_clicked()` 行点击翻转勾选。② 文件对话框（打开/保存/目录）左侧导航在「我的电脑/用户」外新增「桌面」快捷项，`prepare_file_dialog()` 延迟注入 `QUrl.fromLocalFile(Desktop)`。③ 设置页新增「开机自启动」，新模块 `core/autostart.py` 通过 HKCU Run 项读写，确定即生效、恢复默认关闭。④ 打开本地视频时 `_sibling_videos()` 自动把同目录全部视频加入播放列表（播放列表「添加文件」不触发扩展）。⑤ 视频区仅左键双击全屏，右键双击不再触发（PlayerWidget.mouseDoubleClickEvent 按 `LeftButton` 过滤）。⑥ 版本号统一升级 v1.0.1（version.py / spec / version_info.txt / workflow 动态读版本）；新增 `tests/test_v101_features.py` 30 项断言，全套回归通过；实测产物 70,588,525 字节，SHA256 `36a019f2…55a`，启动冒烟正常 |
+| v1.1.35 | **修复打开视频时当前文件在播放列表重复显示**：根因是命令行 / 文件关联传入的路径使用正斜杠 `/`，而扫描同目录时用 `os.path.join()` 拼出反斜杠 `\`，`_sibling_videos()` 原以路径字符串原样去重，两种斜杠形式被视为不同文件，导致当前播放视频被加入两次。`_sibling_videos()` 与 `PlaylistPanel.add_paths()` 均改用 `os.path.normcase(os.path.abspath(p))` 规范化路径作为去重 key（统一斜杠与大小写差异）。同时调整展示顺序：同目录视频统一按文件名排序展示，当前播放文件不再置顶；`_open_paths()` 把播放目标从列表顺序中分离，始终播放用户实际打开的文件，由 `highlight()` 在列表中高亮，播放位置记忆 key 不受影响。新增正斜杠去重、排序、播放目标分离回归断言，全套测试通过；实测产物 70,587,406 字节，SHA256 `75ef2df9…e008aa`，启动冒烟正常 |
+
+> 版本号统一采用 **v主版本.次版本.修订号**（如 `v1.0.1`）；产品首个发布版本为 `v1.0.0`，当前产品版本为 **v1.0.1**，文档修订号独立递增至 **v1.1.35**。EXE 固定版本资源为 `1.0.1.0`，字符串版本显示为 `v1.0.1`。
 
 ---
 
@@ -707,7 +711,7 @@ CXPurePlayer/
 
 ### 6.4 EXE 体积（实测）
 
-**实测产物**：`dist/CXPurePlayer-v1.0.0-win-x64.exe` = **70,580,527 字节 ≈ 67.3 MiB**（含内嵌 `LICENSE` / `LICENSE.GPL3` 许可证文本）。早期文档估算的“约 50 MB / libmpv 精简构建约 14 MB”已明显偏低——实际采用的 LGPL libmpv 构建内含完整 FFmpeg 解码器，是体积主导项。
+**实测产物**：`dist/CXPurePlayer-v1.0.1-win-x64.exe` = **70,587,406 字节 ≈ 67.3 MiB**（含内嵌 `LICENSE` / `LICENSE.GPL3` 许可证文本）。早期文档估算的“约 50 MB / libmpv 精简构建约 14 MB”已明显偏低——实际采用的 LGPL libmpv 构建内含完整 FFmpeg 解码器，是体积主导项。
 
 用 PyInstaller 归档读取器对 PKG 清单按类别汇总（压缩后）：
 
