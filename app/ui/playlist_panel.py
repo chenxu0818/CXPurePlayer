@@ -73,9 +73,16 @@ class PlaylistPanel(QWidget):
             self.filesAdded.emit(paths)
 
     def add_paths(self, paths: list[str]) -> None:
+        # 规范化 key 去重：正斜杠 / 与反斜杠 \、大小写差异视为同一文件，
+        # 避免当前播放视频以两种路径形式被重复加入列表。
+        def key(p: str) -> str:
+            return os.path.normcase(os.path.abspath(p))
+        existing = {key(item.path) for item in self._items}
         for path in paths:
-            if any(item.path == path for item in self._items):
+            k = key(path)
+            if k in existing:
                 continue
+            existing.add(k)
             item = PlaylistItem(path=path, name=os.path.basename(path),
                                 missing=not os.path.isfile(path))
             self._items.append(item)
