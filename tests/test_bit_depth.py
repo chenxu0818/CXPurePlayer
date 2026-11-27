@@ -75,9 +75,28 @@ def test_fallback_to_video_params() -> None:
 
 
 def test_no_pixelformat_no_bogus_depth() -> None:
-    """既无 pix_fmt 也无 pixelformat、只有 average-bpp 时，不显示伪造的位深。"""
+    """既无 pix_fmt 也无 pixelformat、只有 average-bpp 时，Bit depth 字段仍存在且为 8 bits，
+    绝不显示 average-bpp 的 12 bits，也绝不让字段消失。"""
     text = _video_text("", {"average-bpp": 12})
-    check("无像素格式时不伪造位深", "Bit depth" not in text)
+    check("无像素格式时 Back-to-8 bits（字段不消失）",
+          "Bit depth                         : 8 bits" in text)
+    check("无像素格式也不显示 12 bits",
+          "Bit depth                         : 12 bits" not in text)
+
+
+def test_mpv_format_name_fallback() -> None:
+    """mpv 轨道原始字段 format-name 是像素格式来源：video-params 未就绪时也要显示 Bit depth。"""
+    info = MediaInfo(path="x.ts", name="x.ts", duration=600.0)
+    info.streams.append(StreamInfo(
+        index=0, codec_type="video", codec_name="h264",
+        width=1920, height=1080, r_frame_rate="25/1",
+        pix_fmt="", bit_rate="4000000", raw={"format-name": "yuv420p"},
+    ))
+    info.video_params = {}  # video-params 尚未就绪
+    text = format_media_info(info)
+    check("format-name 兜底显示 8 bits",
+          "Bit depth                         : 8 bits" in text)
+    check("format-name 兜底显示 Color space YUV", "Color space" in text)
 
 
 def test_high_bitdepth_formats() -> None:
@@ -92,6 +111,7 @@ def main() -> None:
     test_yuv420p_not_twelve()
     test_fallback_to_video_params()
     test_no_pixelformat_no_bogus_depth()
+    test_mpv_format_name_fallback()
     test_high_bitdepth_formats()
     print("ALL_BIT_DEPTH_TESTS_PASSED")
 

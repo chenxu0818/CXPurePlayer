@@ -145,13 +145,29 @@ def _codec_id(stream: StreamInfo) -> str:
 
 
 def _pixel_format_of(stream: StreamInfo, info: MediaInfo) -> str:
-    """统一取像素格式：优先解码后的 video-params，其次轨道的 pixelformat。
+    """统一取像素格式，兼容 mpv / ffprobe 两条探测路径。
 
-    libmpv 的 track-list 里视频轨常常没有 pixelformat，而 video-params 里有；
-    两条探测路径（mpv / ffprobe）都要兼容，避免位深回退到错误的 average-bpp。
+    取数优先级：
+    1. 解码后的 ``video-params.pixelformat``（最准）；
+    2. ``stream.pix_fmt``（ffprobe 路径直接写入）；
+    3. mpv 轨道原始字段 ``format-name`` / ``demux-format`` / ``pixelformat``——
+       libmpv 的 track-list 里视频轨用的是 ``format-name``，并没有 ``pixelformat``，
+       所以过去只取 ``pixelformat`` 会在 video-params 尚未就绪时拿到空串，
+       进而导致 Bit depth 字段整个消失（用户反馈「属性里没有 Bit depth 了」）。
     """
     vp = info.video_params or {}
-    return str(vp.get("pixelformat") or stream.pix_fmt or "").lower()
+    raw = stream.raw or {}
+    candidates = (
+        vp.get("pixelformat"),
+        stream.pix_fmt,
+        raw.get("format-name"),
+        raw.get("demux-format"),
+        raw.get("pixelformat"),
+    )
+    for value in candidates:
+        if value:
+            return str(value).lower()
+    return ""
 
 
 def _bit_depth(pix: str) -> str:
@@ -292,9 +308,11 @@ def _section_video(stream: StreamInfo, info: MediaInfo) -> List[str]:
                 break
     elif pix.startswith(("rgb", "bgr")):
         add("Color space", "RGB")
-    depth = _bit_depth(pix)
-    if depth:
-        add("Bit depth", depth)
+    # Bit depth 对视频流必须始终展示：优先从像素格式精确解析；像素格式未知时
+    # 回退 8 bits（绝大多数视频为 8bit），避免字段整个消失。绝不使用 mpv 的
+    # average-bpp——那是每像素平均位数（8bit yuv420p 为 12），不是位深。
+    depth = _bit_depth(pix) or "8 bits"
+    add("Bit depth", depth)
     add("Bits/(Pixel*Frame)", _bits_per_pixel_frame(stream, bitrate))
     try:
         stream_size = float(bitrate or 0) * float(raw.get("demux-duration") or info.duration) / 8

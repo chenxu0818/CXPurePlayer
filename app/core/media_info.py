@@ -261,7 +261,10 @@ def build_info_from_mpv(player, path: str, live: bool = False) -> MediaInfo:
                 sample_rate=sample_rate,
                 channels=channels,
                 bit_rate=str(rate),
-                pix_fmt=str(track.get("pixelformat", "") or vparams.get("pixelformat", "")),
+                # libmpv 视频轨的像素格式字段是 format-name（并非 pixelformat），
+                # video-params 未就绪时它是唯一可靠来源，缺失会让 Bit depth 消失。
+                pix_fmt=str(track.get("pixelformat", "") or track.get("format-name", "")
+                            or vparams.get("pixelformat", "")),
                 language=str(track.get("lang", "") or (track.get("metadata") or {}).get("language", "")),
                 title=str(track.get("title", "")),
                 raw=raw,
