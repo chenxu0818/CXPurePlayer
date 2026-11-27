@@ -113,8 +113,9 @@ jobs:
       - name: Fetch LGPL libmpv runtime
         run: |
           set -euo pipefail
-          curl -L --fail --retry 3 \
+          curl -L --fail --retry 5 --retry-all-errors --retry-delay 5 \
             -H 'Accept: application/octet-stream' \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -o libmpv-runtime.tar.gz \
             "https://api.github.com/repos/178meorg/libmpv-macos-build/releases/assets/${{ matrix.asset_id }}"
           rm -rf libmpv-runtime
