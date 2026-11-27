@@ -38,6 +38,38 @@ def user_data_root() -> str:
     return app_root()
 
 
+def bin_dirs() -> list[str]:
+    """随包动态库目录：打包模式下兼容 _MEIPASS 与 App 同目录 bin。"""
+    dirs = [os.path.join(resource_root(), "bin")]
+    if getattr(sys, "frozen", False):
+        dirs.append(os.path.join(app_root(), "bin"))
+    return dirs
+
+
+def subprocess_env() -> dict:
+    """外部工具子进程环境：移除本程序为 libmpv 注入的 dyld 搜索路径。
+
+    macOS 上 ensure_bin_path() 会把随包 bin 写入 DYLD_LIBRARY_PATH。
+    系统 Homebrew 的 ffmpeg / ffprobe 若继承该变量，会错误链接到随包旧版
+    libav* 并报 _av_dict_parse_string 符号缺失，导致属性探测与录制后端
+    全部失效。外部工具应使用自己的 rpath，故在启动子进程前剔除这些路径。
+    """
+    env = os.environ.copy()
+    if sys.platform != "darwin":
+        return env
+    injected = {os.path.normpath(path) for path in bin_dirs()}
+    for key in ("DYLD_LIBRARY_PATH", "DYLD_FALLBACK_LIBRARY_PATH"):
+        parts = [
+            path for path in env.get(key, "").split(os.pathsep)
+            if path and os.path.normpath(path) not in injected
+        ]
+        if parts:
+            env[key] = os.pathsep.join(parts)
+        else:
+            env.pop(key, None)
+    return env
+
+
 def ensure_bin_path() -> str:
     """把随包 bin 目录加入 PATH / DLL 搜索路径，使 python-mpv 能找到 libmpv-2.dll。
 
@@ -45,9 +77,7 @@ def ensure_bin_path() -> str:
     打包模式下同时兼容 _MEIPASS（解压目录）与 EXE 同目录 bin。
     """
     primary = os.path.join(resource_root(), "bin")
-    candidates = [primary]
-    if getattr(sys, "frozen", False):
-        candidates.append(os.path.join(app_root(), "bin"))
+    candidates = bin_dirs()
     if sys.platform == "darwin":
         # python-mpv 在非 Windows 平台用 ctypes.util.find_library 查找 libmpv。
         # macOS 的 dyld 会读取 DYLD_LIBRARY_PATH / DYLD_FALLBACK_LIBRARY_PATH。

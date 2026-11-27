@@ -613,6 +613,11 @@ class MainWindow(QMainWindow):
             log_error("[启动] _init_player 失败，libmpv 不可用")
         else:
             self.player.set_volume(self.settings.volume)
+            # macOS 的 QOpenGLWidget.initializeGL 可能早于 mpv 实例创建。
+            # 内核就绪后补建渲染上下文，否则文件能加载但画面不会显示。
+            ensure = getattr(self.player_widget, "ensure_render_context", None)
+            if callable(ensure):
+                ensure()
             self._update_status(tr("未打开视频"))
             log_info("[启动] _init_player 成功")
 

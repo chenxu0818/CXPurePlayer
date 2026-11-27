@@ -467,7 +467,26 @@ class Recorder(QObject):
                     terminal=False, msg_level="all=warn",
                     stream_record=path,
                 )
-                instance.register_event_callback(lambda event, t=task: self._on_record_event(t, event))
+                def _on_libmpv_record_event(event, t=task, inst=None, output=path):
+                    data = event.as_dict() if hasattr(event, "as_dict") else {}
+                    name = data.get("event") or getattr(event, "event", "")
+                    if isinstance(name, bytes):
+                        name = name.decode("utf-8", "replace")
+                    if name == "file-loaded":
+                        # 构造期设置的 stream-record 在部分 libmpv 版本/平台
+                        # 会被 loadfile 忽略，表现为文件已创建但始终 0 bytes。
+                        # 文件加载完成后补设一次（仅在尚未生效时），不影响 Windows。
+                        try:
+                            if not inst.stream_record:
+                                inst.stream_record = output
+                                record_logger.info(f"任务 {t.id} 在 file-loaded 后确认 stream-record")
+                        except Exception as exc:
+                            record_logger.warning(f"任务 {t.id} 补设 stream-record 失败：{exc}")
+                    self._on_record_event(t, event)
+
+                instance.register_event_callback(
+                    lambda event, t=task, inst=instance: _on_libmpv_record_event(event, t, inst)
+                )
                 instance.play(task.url)
             except Exception as exc:
                 task.status = TaskStatus.FAILED.value

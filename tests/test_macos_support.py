@@ -8,8 +8,9 @@ from app.core import autostart
 from app.core import mpv_player as mpv_player_mod
 from app.core import settings as settings_mod
 from app.core import ui_scale as ui_scale_mod
-from app.core.settings import user_data_root
+from app.core.settings import subprocess_env, user_data_root
 from app.core.ui_scale import ui_font_family
+from app.ui.mpv_render_widget import MpvRenderWidget
 
 
 def test_autostart_supported_only_on_windows(monkeypatch) -> None:
@@ -64,3 +65,57 @@ def test_ui_font_family_switches_on_macos(monkeypatch) -> None:
 
     monkeypatch.setattr(ui_scale_mod.sys, "platform", "win32")
     assert ui_font_family() == "Microsoft YaHei"
+
+
+def test_subprocess_env_drops_injected_dyld_paths(monkeypatch) -> None:
+    """外部 ffmpeg/ffprobe 不能继承随包 libav* 搜索路径。"""
+    monkeypatch.setattr(settings_mod.sys, "platform", "darwin")
+    monkeypatch.setattr(settings_mod.os.path, "sep", "/")
+    monkeypatch.setattr(settings_mod.os, "pathsep", ":")
+    monkeypatch.setattr(settings_mod, "bin_dirs", lambda: ["/Applications/CXPurePlayer.app/bin"])
+    monkeypatch.setenv(
+        "DYLD_LIBRARY_PATH",
+        "/Applications/CXPurePlayer.app/bin:/usr/local/lib",
+    )
+    monkeypatch.setenv("DYLD_FALLBACK_LIBRARY_PATH", "/Applications/CXPurePlayer.app/bin")
+
+    env = subprocess_env()
+    assert "CXPurePlayer.app/bin" not in env.get("DYLD_LIBRARY_PATH", "")
+    assert "/usr/local/lib" in env.get("DYLD_LIBRARY_PATH", "")
+    assert "DYLD_FALLBACK_LIBRARY_PATH" not in env
+
+
+def test_subprocess_env_unchanged_on_windows(monkeypatch) -> None:
+    monkeypatch.setattr(settings_mod.sys, "platform", "win32")
+    monkeypatch.setenv("DYLD_LIBRARY_PATH", "/somewhere")
+    assert subprocess_env().get("DYLD_LIBRARY_PATH") == "/somewhere"
+
+
+def test_render_context_retries_after_player_ready(app) -> None:
+    """initializeGL 早于 mpv 就绪时不能把渲染上下文永久标记为 ready。"""
+
+    class FakePlayer:
+        available = False
+
+        def __init__(self) -> None:
+            self.created = 0
+            self.callback = None
+
+        def create_render_context(self, _get_proc_address) -> bool:
+            self.created += 1
+            return self.available
+
+        def set_render_update_callback(self, callback) -> None:
+            self.callback = callback
+
+    player = FakePlayer()
+    widget = MpvRenderWidget(object(), player)
+    assert widget._setup_render_context() is False
+    assert widget._render_ready is False
+
+    player.available = True
+    assert widget._setup_render_context() is True
+    assert widget._render_ready is True
+    assert player.created == 1
+    assert player.callback is not None
+    widget.deleteLater()

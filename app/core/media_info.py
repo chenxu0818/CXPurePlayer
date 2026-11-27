@@ -11,7 +11,7 @@ from PySide6.QtCore import QObject, QThread, Signal
 
 from .logger import log_error, log_info
 from .models import MediaInfo, StreamInfo
-from .settings import resource_root
+from .settings import resource_root, subprocess_env
 
 FFPROBE_CANDIDATES = [
     os.path.join(resource_root(), "bin", "ffprobe.exe"),
@@ -75,6 +75,7 @@ class ProbeWorker(QThread):
                 encoding="utf-8",
                 errors="replace",
                 timeout=20 if self.live else 60,
+                env=subprocess_env(),
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             if self._stop:

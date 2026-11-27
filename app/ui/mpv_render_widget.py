@@ -50,15 +50,39 @@ class MpvRenderWidget(QOpenGLWidget):
             return 0
         return int(glctx.getProcAddress(QByteArray(name)))
 
-    def initializeGL(self) -> None:
+    def _setup_render_context(self) -> bool:
+        """在当前 GL 上下文中创建渲染上下文；内核晚于 GL 就绪时必须能重试。"""
+        if self._render_ready:
+            return True
+        # initializeGL 常在 mpv 实例创建之前执行，此时不能把 ready 锁死为 True，
+        # 否则后续 paintGL 永远不会再尝试，表现为「文件已加载但画面全黑」。
+        if not self._player.available:
+            return False
         ok = self._player.create_render_context(self._get_proc_address)
         if ok:
             self._player.set_render_update_callback(self._bridge.updateRequested.emit)
             self._render_ready = True
-        self.renderReady.emit()
+            self.renderReady.emit()
+        return ok
+
+    def ensure_render_context(self) -> None:
+        """mpv 就绪后由主窗口调用，补建之前跳过的渲染上下文。"""
+        if self._render_ready or not self._player.available:
+            return
+        self.makeCurrent()
+        try:
+            self._setup_render_context()
+        finally:
+            self.doneCurrent()
+        self.update()
+
+    def initializeGL(self) -> None:
+        self._setup_render_context()
         self.update()
 
     def paintGL(self) -> None:
+        if not self._render_ready:
+            self._setup_render_context()
         self._player.render_frame(self.width(), self.height(), self.defaultFramebufferObject())
         if self._has_media:
             return

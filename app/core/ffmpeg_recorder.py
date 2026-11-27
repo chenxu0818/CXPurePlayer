@@ -13,7 +13,7 @@ import subprocess
 from typing import Optional
 
 from .logger import log_error, log_info
-from .settings import resource_root
+from .settings import resource_root, subprocess_env
 
 FFMPEG_CANDIDATES = [
     os.path.join(resource_root(), "bin", "ffmpeg.exe"),
@@ -44,6 +44,7 @@ def has_ffmpeg() -> bool:
             [binary, "-version"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             timeout=5,
+            env=subprocess_env(),
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         return result.returncode == 0
@@ -83,6 +84,7 @@ def spawn(url: str, output: str) -> Optional[subprocess.Popen]:
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=subprocess_env(),
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         log_info(f"[录制] ffmpeg 整流录制启动：{output}（保留全部音轨）")
