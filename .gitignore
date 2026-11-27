@@ -7,6 +7,8 @@ __pycache__/
 # 构建中间产物与发布产物（Release 由 CI 生成，不入库）
 build/
 dist/
+build_new*/
+dist_new*/
 
 # libmpv DLL 由 CI 从 LGPL 上游构建下载，不入库
 bin/libmpv-2.dll
