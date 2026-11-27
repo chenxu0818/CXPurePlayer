@@ -239,10 +239,18 @@ def test_startup_active_task_launches() -> None:
 
 def test_reschedule() -> None:
     r = Recorder(AppSettings())
+    # 用相对日期构造，避免硬编码日期在当天运行失败（_reschedule 以 now 为下界）
+    from datetime import datetime as _dt, timedelta as _td
+    yesterday = (_dt.now() - _td(days=1)).strftime("%Y-%m-%d")
     t = RecordTask(id="x", channel="c", frequency="daily", time_start="09:30", time_end="10:00",
-                   start_time="2026-11-26 09:30", end_time="2026-11-26 10:00")
+                   start_time=f"{yesterday} 09:30", end_time=f"{yesterday} 10:00")
     ok = r._reschedule(t)
-    check("循环重排成功", ok and t.start_time == "2026-11-27 09:30" and t.run_index == 1)
+    # 重排后的开始时刻必须晚于当前时间，且日期在计划日之后、run_index 递增
+    from app.core.recorder import parse_time as _parse_time
+    new_start = _parse_time(t.start_time)
+    check("循环重排成功",
+          ok and new_start is not None and new_start > _dt.now() and t.run_index == 1,
+          f"start={t.start_time} now={_dt.now()}")
     check("重排后等待中", t.status == TaskStatus.WAITING.value)
     once = RecordTask(id="y", channel="c", frequency="once")
     check("单次不重排", r._reschedule(once) is False)

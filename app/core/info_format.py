@@ -144,6 +144,58 @@ def _codec_id(stream: StreamInfo) -> str:
     return codec.upper() if codec else ""
 
 
+def _pixel_format_of(stream: StreamInfo, info: MediaInfo) -> str:
+    """统一取像素格式：优先解码后的 video-params，其次轨道的 pixelformat。
+
+    libmpv 的 track-list 里视频轨常常没有 pixelformat，而 video-params 里有；
+    两条探测路径（mpv / ffprobe）都要兼容，避免位深回退到错误的 average-bpp。
+    """
+    vp = info.video_params or {}
+    return str(vp.get("pixelformat") or stream.pix_fmt or "").lower()
+
+
+def _bit_depth(pix: str) -> str:
+    """从像素格式字符串解析位深，返回 ``"N bits"``；无法判断时返回空串。
+
+    只根据像素格式本身判断，绝不使用 mpv 的 ``average-bpp``——那是「每像素
+    平均位数」（如 8bit yuv420p 为 8+2+2=12），不是位深，曾导致 8bit 被显示成
+    12 bits。解析规则覆盖 FFmpeg 常见命名：
+
+    - ``yuv420p`` / ``nv12`` / ``yuyv422`` → 8 bits（无显式位深后缀）
+    - ``yuv420p10le`` / ``yuv422p12le`` / ``gbrp16le`` → 后缀数字即位深
+    - ``p010le`` / ``p016le`` / ``yuv420p10`` → 10 / 16 bits
+    - ``rgb24`` → 8 bits；``rgb48le`` → 16 bits
+    """
+    pix = (pix or "").lower()
+    if not pix:
+        return ""
+    # 形如 yuv420p / yuv420p10le / gbrp16le / rgb48le 的末尾位深数字：
+    # 紧跟在 'p' 之后、可选的 le/be 之前（如 p10、p12、p16），或 rgb24/rgb48。
+    import re
+    m = re.search(r"p(\d{1,2})(?:le|be)?$", pix)
+    if m:
+        depth = int(m.group(1))
+        if depth in (8, 9, 10, 12, 14, 16):
+            return f"{depth} bits"
+    # rgb24/rgb48 表示整帧每像素位数（3 通道），需除以通道数换成单通道位深
+    m = re.match(r"^(?:rgb|bgr)(\d{1,2})(?:le|be)?$", pix)
+    if m:
+        total = int(m.group(1))
+        per_channel = total // 3
+        if per_channel in (8, 10, 12, 14, 16):
+            return f"{per_channel} bits"
+    # p010 / p016 系列（ planes 命名，如 p010le）
+    m = re.match(r"^p0?(\d{1,2})(?:le|be)?$", pix)
+    if m:
+        depth = int(m.group(1))
+        if depth in (8, 10, 12, 14, 16):
+            return f"{depth} bits"
+    # 其余常见 8bit 像素格式：yuv420p 已在上面 p(\d) 不匹配，落到默认 8。
+    if pix.startswith(("yuv", "rgb", "bgr", "nv", "gray", "gbr", "uyvy", "yuyv")):
+        return "8 bits"
+    return ""
+
+
 def _bits_per_pixel_frame(stream: StreamInfo, bitrate: str) -> str:
     try:
         bits = float(bitrate or 0)
@@ -231,21 +283,18 @@ def _section_video(stream: StreamInfo, info: MediaInfo) -> List[str]:
         add("Chroma location", str(vp["chroma-location"]))
     if vp.get("colorlevels"):
         add("Color range", "Full" if "full" in str(vp["colorlevels"]).lower() else "Limited")
-    pix = (stream.pix_fmt or "").lower()
-    if pix.startswith("yuv") or pix.startswith("rgb"):
-        add("Color space", "YUV" if pix.startswith("yuv") else "RGB")
-        for token, label in (("420", "4:2:0"), ("422", "4:2:2"), ("444", "4:4:4")):
+    pix = _pixel_format_of(stream, info)
+    if pix.startswith(("yuv", "nv", "gbr", "uyvy", "yuyv")):
+        add("Color space", "YUV")
+        for token, label in (("420", "4:2:0"), ("422", "4:2:2"), ("444", "4:4:4"), ("410", "4:1:0"), ("411", "4:1:1")):
             if token in pix:
                 add("Chroma subsampling", label)
                 break
-        if "10" in pix:
-            add("Bit depth", "10 bits")
-        elif any(n in pix for n in ("12", "14", "16")):
-            add("Bit depth", "16 bits")
-        else:
-            add("Bit depth", "8 bits")
-    elif vp.get("average-bpp"):
-        add("Bit depth", f"{vp['average-bpp']} bits")
+    elif pix.startswith(("rgb", "bgr")):
+        add("Color space", "RGB")
+    depth = _bit_depth(pix)
+    if depth:
+        add("Bit depth", depth)
     add("Bits/(Pixel*Frame)", _bits_per_pixel_frame(stream, bitrate))
     try:
         stream_size = float(bitrate or 0) * float(raw.get("demux-duration") or info.duration) / 8
