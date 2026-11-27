@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from typing import Iterable
 
 from PySide6.QtCore import Qt
@@ -30,7 +31,8 @@ def _resource(relative: str) -> str:
 def app_icon() -> QIcon:
     global _ICON
     if _ICON is None:
-        path = _resource("icon.ico")
+        name = "icon.icns" if sys.platform == "darwin" else "icon.ico"
+        path = _resource(name)
         _ICON = QIcon(path) if os.path.isfile(path) else QIcon()
     return _ICON
 

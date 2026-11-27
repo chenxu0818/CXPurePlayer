@@ -1,12 +1,12 @@
-# CXPurePlayer v1.0.2
+# CXPurePlayer v1.0.3
 
-本地视频播放器 + IPTV 播放器。基于 PySide6 与 libmpv，科技 / 现代 / 互联网风格界面，单文件 EXE 分发，开箱即用。
+本地视频播放器 + IPTV 播放器。基于 PySide6 与 libmpv，科技 / 现代 / 互联网风格界面；Windows 提供单文件 EXE，macOS 提供 `.app` / DMG，开箱即用。
 
-> **v1.0.0 基线功能已全部交付，v1.0.1 为交互增强版，v1.0.2 新增循环录制（单次/每日/每周/自定义）与全音轨录制。** 本 README 仅描述当前已实现能力；字幕样式、截图格式输出等 P1 增强，以及画中画、EPG、在线拉取列表、macOS / ARM64 等远期项，均不属于当前版本范围。
+> **v1.0.0 基线功能已全部交付，v1.0.1 为交互增强版，v1.0.2 新增循环录制（单次/每日/每周/自定义）与全音轨录制，v1.0.3 新增 macOS 11+ 支持（Apple Silicon / Intel）。** 本 README 仅描述当前已实现能力；字幕样式、截图格式输出等 P1 增强，以及画中画、EPG、在线拉取列表等远期项，均不属于当前版本范围。
 
 ## 功能特性
 
-### 已实现（v1.0.0 基线 + v1.0.1 / v1.0.2 增强）
+### 已实现（v1.0.0 基线 + v1.0.1 / v1.0.2 / v1.0.3 增强）
 
 - 本地播放：播放 / 暂停 / 停止 / 进度定位 / 全屏 / 静音与音量调节，支持 8 档倍速；倍速在标题栏右上角以实际档位徽标展示（如「0.75x」「1.0x」「1.25x」），点击即选即生效。
 - 文件打开：菜单 `Ctrl+O`、拖放文件到视频区、命令行参数，以及右键「打开方式」或双击关联文件均可打开本地视频。
@@ -31,6 +31,8 @@
 - 全音轨录制（v1.0.2）：录制优先调用系统 ffmpeg（若可用）以 `-map 0 -c copy` 整流复制，完整保留双音轨 / 多音视频流（如 mp2 + ac3）；无 ffmpeg 时自动回退 libmpv `stream-record`。ffmpeg 为可选外部工具，不随包。
 - 控制栏守卫（v1.0.2）：未打开视频时播放 / 停止 / 快进 / 快退按钮置灰禁用，菜单与快捷键同步拦截空操作，不再报错。
 - 磁盘空间（v1.0.2）：新建录制任务的剩余空间提示由 MB 改为 GB 显示。
+- 跨平台（v1.0.3）：macOS 11+ 支持 Apple Silicon（arm64）与 Intel（x86_64），中文界面自动使用苹方字体；Windows 继续使用微软雅黑，且用户数据仍写在 EXE 同目录，不影响既有使用习惯。
+- macOS 数据与合规（v1.0.3）：macOS 包内配置、录制、日志写入 `~/Library/Application Support/CXPurePlayer`，安装包内置 LGPL libmpv 动态库、依赖库与许可证文本；Windows 专属的「开机自启动」在 macOS 下自动隐藏。
 
 ### 待实现（P1 增强）
 
@@ -45,23 +47,25 @@
 
 - 画中画、睡眠定时、自动下一集。
 - 通用 URL 流、EPG / 节目回看、在线拉取 m3u8 列表。
-- macOS / ARM64 适配。
 
 ## 下载与安装
 
-当前版本：**v1.0.2**。仅提供 Windows x64 单文件 EXE。
+当前版本：**v1.0.3**。提供 Windows x64 单文件 EXE，以及 macOS 11+ 的 Apple Silicon / Intel DMG。
 
 | 平台 | 文件 | 说明 |
 | --- | --- | --- |
-| Windows 10 / 11 x64 | `CXPurePlayer-v1.0.2-win-x64.exe` | 单文件 EXE，无需安装，内置 LGPL 版 libmpv 与 Qt 运行时 |
+| Windows 10 / 11 x64 | `CXPurePlayer-v1.0.3-win-x64.exe` | 单文件 EXE，无需安装，内置 LGPL 版 libmpv 与 Qt 运行时 |
+| macOS 11+ Apple Silicon | `CXPurePlayer-v1.0.3-macos-arm64.dmg` | 拖入「应用程序」即可；内置 LGPL libmpv 2.dylib 及依赖 |
+| macOS 11+ Intel | `CXPurePlayer-v1.0.3-macos-x86_64.dmg` | 拖入「应用程序」即可；内置 LGPL libmpv 2.dylib 及依赖 |
 
-- 直接双击运行即可；配置与数据写在 EXE 同目录：`settings.ini`、`channels.json`、`recordings.json`、`record/`。
-- 发布包不需要额外安装 FFmpeg / ffprobe，也不需要系统编解码器。
-- 如需通过文件关联打开视频，可在资源管理器中右键视频文件，选择「打开方式」并指定本 EXE。
+- Windows 直接双击运行即可；配置与数据仍写在 EXE 同目录：`settings.ini`、`channels.json`、`recordings.json`、`record/`，与 v1.0.2 使用习惯一致。
+- macOS 打开 DMG 后将应用拖入「应用程序」；配置、录制与日志写入 `~/Library/Application Support/CXPurePlayer`。应用仅做 ad-hoc 签名、未做 Apple 公证，首次打开如被系统拦截，请在「访达」中右键应用选择「打开」。
+- 发布包不需要额外安装 FFmpeg / ffprobe 即可播放与录制；如需完整保留多音轨录制与更详细的属性探测，可自行安装 ffmpeg / ffprobe（macOS 会查找 `/opt/homebrew/bin` 与 `/usr/local/bin`）。
+- Windows 如需文件关联，可在资源管理器中右键视频文件，选择「打开方式」并指定本 EXE。
 
 ## 快速开始
 
-1. 运行 `CXPurePlayer-v1.0.2-win-x64.exe`。
+1. 运行当前平台安装包（Windows 为 `CXPurePlayer-v1.0.3-win-x64.exe`，macOS 为对应架构的 DMG）。
 2. 按 `Ctrl+O`、拖入视频文件，或在资源管理器中通过文件关联打开。
 3. 使用空格播放 / 暂停，方向键定位与调音量，右上角倍速徽标切换播放速度。
 4. 按 `Tab` 查看播放信息 OSD，按 `F6` / `Ctrl+L` 打开播放列表。
@@ -136,11 +140,13 @@ v1.0.1 在基线之上增加：录制任务勾选式操作规则（点击行选�
 
 v1.0.2 在 v1.0.1 之上增加：录制频率（单次 / 每日 / 每周 / 自定义，循环任务自动顺延，任务列表同步展示）、二级分组频道选择、ffmpeg 全音轨录制（可选，缺则回退 libmpv）、无媒体时禁用播放控制按钮、磁盘空间按 GB 显示。
 
+v1.0.3 在 v1.0.2 之上增加：macOS 11+ 支持（Apple Silicon / Intel 双架构 DMG）、跨平台用户数据目录（Windows 保持 EXE 同目录，macOS 使用 Application Support）、跨平台中文字体与 macOS 下隐藏 Windows 专属开机自启动、macOS 包内置 LGPL libmpv 运行库及许可证文本。Windows 既有 v1.0.2 EXE 的数据文件与使用习惯保持不变。
+
 以下内容**不属于当前版本已交付范围**：
 
 - P1 增强：音画同步、字幕样式、最近文件与列表持久化、窗口置顶与自定义画面比例设置、立即录制、录制二次确认、频道排序与禁用切换、外挂轨道移除 / 字幕编码 UI、截图格式输出与 JPG 质量、OSD 自动隐藏、混合 DPI 多屏自动跟随、关于对话框版本详情。
 - 设置中保留了截图格式等 P1 占位项，但当前截图执行器统一输出 PNG，格式选择暂不生效。
-- 远期目标：画中画、睡眠定时、自动下一集、通用 URL 流、EPG / 节目回看、在线拉取 m3u8 列表、macOS / ARM64 适配。
+- 远期目标：画中画、睡眠定时、自动下一集、通用 URL 流、EPG / 节目回看、在线拉取 m3u8 列表。
 
 ## 从源码运行
 
@@ -150,13 +156,13 @@ v1.0.2 在 v1.0.1 之上增加：录制频率（单次 / 每日 / 每周 / 自�
 python -m pip install -r requirements.txt
 ```
 
-将 LGPL 构建的 `libmpv-2.dll` 放入 `bin/`，然后运行：
+Windows 将 LGPL 构建的 `libmpv-2.dll` 放入 `bin/`；macOS 将 LGPL 运行库中的 `libmpv.2.dylib`、`libmpv.dylib` 及依赖放入 `bin/`（程序会自动注入 dyld 搜索路径），然后运行：
 
 ```bash
 python main.py
 ```
 
-源码模式下配置与日志写入项目根目录：`settings.ini`、`channels.json`、`recordings.json`、`log/`、`record/`。
+源码模式下 Windows 配置与日志写入项目根目录：`settings.ini`、`channels.json`、`recordings.json`、`log/`、`record/`；macOS 源码模式同样写入项目根目录，打包后的 macOS 应用写入 `~/Library/Application Support/CXPurePlayer`。
 
 ## 打包
 
@@ -166,7 +172,17 @@ Windows x64 单文件 EXE 使用 PyInstaller 构建：
 python -m PyInstaller --clean --noconfirm --distpath dist --workpath build build_tools/windows/build_x64.spec
 ```
 
-产物为 `dist/CXPurePlayer-v1.0.2-win-x64.exe`，实测约 **67 MB**（70,608,429 字节，内含 LGPLv3 / GPLv3 许可证文本）。构建脚本在 `Analysis()` 后裁剪 PySide6 hook 全量收集但项目未使用的 25 项 Qt 二进制，仅保留运行所需的 QtCore / QtGui / QtWidgets 与 qwindows、qico、qjpeg、样式插件。如需应急恢复全量打包，可在构建前设置环境变量 `CXPUREPLAYER_KEEP_QT_ALL=1`。
+产物为 `dist/CXPurePlayer-v1.0.3-win-x64.exe`；v1.0.2 实测约 67 MB（70,608,429 字节，内含 LGPLv3 / GPLv3 许可证文本），v1.0.3 仅增加跨平台代码，体积以实际 Release 为准。构建脚本在 `Analysis()` 后裁剪 PySide6 hook 全量收集但项目未使用的 25 项 Qt 二进制，仅保留运行所需的 QtCore / QtGui / QtWidgets 与 qwindows、qico、qjpeg、样式插件。如需应急恢复全量打包，可在构建前设置环境变量 `CXPUREPLAYER_KEEP_QT_ALL=1`。
+
+macOS 应用包需在 macOS 上构建。先按 `.github/workflows/release.yml` 中方式把对应架构的 LGPL libmpv runtime 解压到 `bin/`，再执行：
+
+```bash
+CXPUREPLAYER_MAC_ARCH=arm64 python -m PyInstaller --clean --noconfirm --distpath dist --workpath build build_tools/macos/build_macos.spec
+codesign --force --deep --sign - "dist/CXPurePlayer-v1.0.3-macos-arm64.app"
+hdiutil create -volname "CXPurePlayer v1.0.3" -srcfolder "dist/CXPurePlayer-v1.0.3-macos-arm64.app" -ov -format UDZO "dist/CXPurePlayer-v1.0.3-macos-arm64.dmg"
+```
+
+Intel 包将 `CXPUREPLAYER_MAC_ARCH` 与产物名中的 `arm64` 改为 `x86_64`。GitHub Actions 已配置双架构矩阵构建与 Release 自动上传。
 
 ## 项目结构
 
@@ -177,7 +193,8 @@ CXPurePlayer/
 │   ├── core/                     # 播放内核、配置、i18n、主题、缩放、日志、截图、M3U、录制
 │   ├── ui/                       # 主窗口、播放列表、IPTV、OSD、属性、设置与各对话框
 │   └── resources/                # 图标资源
-├── build_tools/windows/          # PyInstaller spec 与版本信息
+├── build_tools/windows/          # Windows PyInstaller spec 与版本信息
+├── build_tools/macos/            # macOS PyInstaller spec（.app / DMG）
 ├── docs/                         # 界面预览与需求规格文档
 ├── tests/                        # 冒烟测试与专项回归脚本
 ├── THIRD_PARTY_NOTICES.md        # 第三方许可说明

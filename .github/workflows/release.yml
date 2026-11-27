@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.0.1)'
+        description: 'Release tag (e.g. v1.0.3)'
         required: true
-        default: 'v1.0.1'
+        default: 'v1.0.3'
 
 permissions:
   contents: write
@@ -19,7 +19,7 @@ env:
   PYTHONIOENCODING: utf-8
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
 
     steps:
@@ -61,23 +61,114 @@ jobs:
       - name: Build single-file EXE
         run: python -m PyInstaller --clean --noconfirm --distpath dist --workpath build build_tools/windows/build_x64.spec
 
-      - name: Resolve version and artifact name
+      - name: Resolve artifact name
         shell: pwsh
         run: |
           $version = python -c "from app.version import APP_VERSION; print(APP_VERSION)"
-          $exeName = "CXPurePlayer-$version-win-x64.exe"
           "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $exeName = "CXPurePlayer-$version-win-x64.exe"
           "EXE_NAME=$exeName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "Version: $version, EXE: $exeName"
-
-      - name: Check artifact
-        shell: pwsh
-        run: |
-          $exe = "dist/$env:EXE_NAME"
+          $exe = "dist/$exeName"
           if (!(Test-Path -LiteralPath $exe)) { throw "EXE not found: $exe" }
           $size = (Get-Item -LiteralPath $exe).Length
-          Write-Host "EXE size: $size bytes"
           if ($size -lt 10000000) { throw "EXE too small: $size bytes" }
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/${{ env.EXE_NAME }}
+          if-no-files-found: error
+
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+            asset_id: '474197806'
+          - arch: x86_64
+            runner: macos-15-intel
+            asset_id: '474197807'
+    runs-on: ${{ matrix.runner }}
+
+    env:
+      CXPUREPLAYER_MAC_ARCH: ${{ matrix.arch }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Fetch LGPL libmpv runtime
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 \
+            -H 'Accept: application/octet-stream' \
+            -o libmpv-runtime.tar.gz \
+            "https://api.github.com/repos/178meorg/libmpv-macos-build/releases/assets/${{ matrix.asset_id }}"
+          rm -rf libmpv-runtime
+          mkdir -p libmpv-runtime
+          tar -xzf libmpv-runtime.tar.gz -C libmpv-runtime
+          RUNTIME_DIR="$(find libmpv-runtime -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          mkdir -p bin/licenses
+          cp -a "$RUNTIME_DIR"/lib/. bin/
+          cp -a "$RUNTIME_DIR"/licenses/. bin/licenses/
+          cp "$RUNTIME_DIR/README-runtime.md" bin/README-runtime.md
+          cp "$RUNTIME_DIR/build-info.json" bin/licenses/build-info.json
+          file bin/libmpv.2.dylib
+
+      - name: Verify environment
+        run: |
+          set -euo pipefail
+          export DYLD_LIBRARY_PATH="$PWD/bin:${DYLD_LIBRARY_PATH:-}"
+          export DYLD_FALLBACK_LIBRARY_PATH="$PWD/bin:${DYLD_FALLBACK_LIBRARY_PATH:-}"
+          python -c "import PySide6, mpv; print('PySide6 / python-mpv OK')"
+          python -m compileall -q app main.py tests
+
+      - name: Build macOS app bundle
+        run: python -m PyInstaller --clean --noconfirm --distpath dist --workpath build build_tools/macos/build_macos.spec
+
+      - name: Package DMG
+        run: |
+          set -euo pipefail
+          VERSION="$(python -c 'from app.version import APP_VERSION; print(APP_VERSION)')"
+          APP_NAME="CXPurePlayer-${VERSION}-macos-${{ matrix.arch }}.app"
+          DMG_NAME="CXPurePlayer-${VERSION}-macos-${{ matrix.arch }}.dmg"
+          if [ ! -d "dist/$APP_NAME" ]; then echo "app bundle not found: dist/$APP_NAME" >&2; exit 1; fi
+          find "dist/$APP_NAME" -type f -perm -111 -exec codesign --force --sign - {} \; || true
+          codesign --force --deep --sign - "dist/$APP_NAME"
+          hdiutil create -volname "CXPurePlayer $VERSION" -srcfolder "dist/$APP_NAME" -ov -format UDZO "dist/$DMG_NAME"
+          echo "APP_NAME=$APP_NAME" >> "$GITHUB_ENV"
+          echo "DMG_NAME=$DMG_NAME" >> "$GITHUB_ENV"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: |
+            dist/${{ env.DMG_NAME }}
+          if-no-files-found: error
+
+  release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2
@@ -87,9 +178,12 @@ jobs:
           body: |
             自动构建发布：${{ env.RELEASE_TAG }}
 
-            - 单文件 EXE：`${{ env.EXE_NAME }}`
-            - 构建方式：PyInstaller onefile + LGPL libmpv
+            - Windows x64 单文件 EXE：内置 LGPL 版 libmpv 与 Qt 运行时
+            - macOS 11+ 应用包：分别提供 Apple Silicon（arm64）与 Intel（x86_64）DMG
+            - macOS 包内置 LGPL libmpv 动态库及依赖许可证；未做 Apple 公证，首次打开可按系统提示右键选择「打开」
             - 完整功能与操作说明见仓库 README.md
-          files: dist/${{ env.EXE_NAME }}
+          files: |
+            artifacts/windows-exe/*.exe
+            artifacts/macos-*/*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

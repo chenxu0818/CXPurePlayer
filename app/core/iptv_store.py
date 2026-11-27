@@ -10,12 +10,12 @@ from typing import List
 
 from .logger import log_error
 from .models import Channel, RecordTask
-from .settings import app_root
+from .settings import user_data_root
 
 
 class JsonStore:
     def __init__(self, filename: str) -> None:
-        self.path = os.path.join(app_root(), filename)
+        self.path = os.path.join(user_data_root(), filename)
 
     def load(self) -> list:
         if not os.path.isfile(self.path):

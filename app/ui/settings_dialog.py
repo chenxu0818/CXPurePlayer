@@ -125,7 +125,8 @@ class SettingsDialog(QDialog):
         form.addRow("", self.remember)
 
         self.autostart = QCheckBox(tr("开机自启动"))
-        self.autostart.setChecked(autostart.is_enabled())
+        self.autostart.setChecked(autostart.is_enabled() if autostart.is_supported() else False)
+        self.autostart.setVisible(autostart.is_supported())
         form.addRow("", self.autostart)
 
         layout.addLayout(form)
@@ -170,6 +171,7 @@ class SettingsDialog(QDialog):
         self.retry.setValue(int(defaults["record_retry_interval"]))
         self.remember.setChecked(bool(defaults["remember_position"]))
         self.autostart.setChecked(False)
+        self.autostart.setVisible(autostart.is_supported())
 
     def _on_ok(self) -> None:
         self.settings.language = self.language.currentData()
@@ -182,7 +184,7 @@ class SettingsDialog(QDialog):
         self.settings.record_format = self.record_format.currentData()
         self.settings.record_retry_interval = self.retry.value()
         self.settings.set("remember_position", self.remember.isChecked())
-        error = autostart.set_enabled(self.autostart.isChecked())
+        error = autostart.set_enabled(self.autostart.isChecked()) if autostart.is_supported() else ""
         if error:
             QMessageBox.warning(self, tr("提示"), f"{tr('设置开机自启动失败')}：{error}")
         self.applied.emit()

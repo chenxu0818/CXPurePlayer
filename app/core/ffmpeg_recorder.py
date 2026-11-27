@@ -18,6 +18,8 @@ from .settings import resource_root
 FFMPEG_CANDIDATES = [
     os.path.join(resource_root(), "bin", "ffmpeg.exe"),
     os.path.join(resource_root(), "bin", "ffmpeg"),
+    "/opt/homebrew/bin/ffmpeg",
+    "/usr/local/bin/ffmpeg",
     "ffmpeg",
 ]
 

@@ -19,6 +19,7 @@ from PySide6.QtGui import QColor, QFont, QImage, QPainter
 from PySide6.QtWidgets import QApplication
 
 from .logger import log_error, log_info, log_warning
+from .ui_scale import ui_font_family
 
 ProgressFn = Callable[[int, int, str], None]
 CancelFn = Callable[[], bool]
@@ -263,7 +264,7 @@ def build_thumbnail(
             sheet = QImage(fw * columns, fh * rows, QImage.Format.Format_RGB32)
             sheet.fill(QColor("#000000"))
             painter = QPainter(sheet)
-            font = QFont("Microsoft YaHei", max(12, int(fh * 0.05)))
+            font = QFont(ui_font_family(), max(12, int(fh * 0.05)))
             painter.setFont(font)
             label_h = max(26, int(fh * 0.09))
             for index, (frame_path, stamp) in enumerate(frames):

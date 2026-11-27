@@ -21,7 +21,7 @@ from ..core.i18n import tr
 from ..core.screenshot import (
     SnapshotWorker, _video_stem, build_thumbnail, continuous_snapshots,
 )
-from ..core.settings import app_root
+from ..core.settings import user_data_root
 from .dialog_utils import centered_buttons, compact_button, get_existing_directory, get_save_file
 from .widget_utils import auto_retranslate, mark_dynamic, set_window_icon, translate_standard_buttons
 
@@ -134,7 +134,7 @@ class ThumbnailDialog(_BaseSnapshotDialog):
 
         self.output_edit = QLineEdit()
         self.output_edit.setText(
-            os.path.join(app_root(), f"{_video_stem(self.player)}_thumbnail.png")
+            os.path.join(user_data_root(), f"{_video_stem(self.player)}_thumbnail.png")
         )
         pick = QPushButton(tr("浏览"))
         pick.clicked.connect(self._pick_output)
@@ -151,7 +151,7 @@ class ThumbnailDialog(_BaseSnapshotDialog):
 
     def _pick_output(self) -> None:
         default = self.output_edit.text().strip() or os.path.join(
-            app_root(), f"{_video_stem(self.player)}_thumbnail.png"
+            user_data_root(), f"{_video_stem(self.player)}_thumbnail.png"
         )
         path, _ = get_save_file(
             self, tr("选择保存位置"), default, "PNG (*.png)", self.m
@@ -228,7 +228,7 @@ class ContinuousDialog(_BaseSnapshotDialog):
         self.prefix.setText(_video_stem(self.player) + "_snapshot")
         form.addRow(tr("文件名前缀"), self.prefix)
 
-        self.dir_edit = QLineEdit(app_root())
+        self.dir_edit = QLineEdit(user_data_root())
         pick = QPushButton(tr("浏览"))
         pick.clicked.connect(self._pick_dir)
         path_row = QHBoxLayout()

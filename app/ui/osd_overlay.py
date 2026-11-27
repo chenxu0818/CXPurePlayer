@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter
+
+from ..core.ui_scale import ui_font_family
 from PySide6.QtWidgets import QScrollBar, QWidget
 
 from ..core.i18n import tr
@@ -88,7 +90,7 @@ class OsdOverlay(QWidget):
         self.update()
 
     def _font(self, bold: bool = False, pt: int | None = None) -> QFont:
-        font = QFont("Microsoft YaHei", pt or self._font_pt)
+        font = QFont(ui_font_family(), pt or self._font_pt)
         font.setBold(bold)
         return font
 

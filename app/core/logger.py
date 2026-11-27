@@ -11,9 +11,9 @@ import logging
 import os
 from datetime import datetime, timedelta
 
-from .settings import app_root
+from .settings import user_data_root
 
-_LOG_DIR = os.path.join(app_root(), "log")
+_LOG_DIR = os.path.join(user_data_root(), "log")
 _RETENTION_DAYS = 30
 
 

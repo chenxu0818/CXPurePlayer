@@ -10,8 +10,11 @@ dist/
 build_new*/
 dist_new*/
 
-# libmpv DLL 由 CI 从 LGPL 上游构建下载，不入库
+# libmpv 动态库由 CI 从 LGPL 上游构建下载，不入库
 bin/libmpv-2.dll
+bin/*.dylib
+bin/licenses/
+bin/README-runtime.md
 
 # 运行时用户数据与日志
 log/

@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 import os
+import sys
 
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QFont, QGuiApplication
 from PySide6.QtWidgets import QApplication
+
+def ui_font_family() -> str:
+    """跨平台中文字体：Windows 用微软雅黑，macOS 用苹方。"""
+    if sys.platform == "darwin":
+        return "PingFang SC"
+    return "Microsoft YaHei"
+
 
 # 界面自适应范围：最低 720p，最高 6K（按逻辑分辨率较短边计算）。
 MIN_SUPPORTED_SHORT_SIDE = 720
@@ -99,6 +107,6 @@ class Metrics(QObject):
         return self.s(size)
 
     def apply_font(self, app: QApplication) -> None:
-        font = QFont("Microsoft YaHei")
+        font = QFont(ui_font_family())
         font.setPointSizeF(9 * self._scale)
         app.setFont(font)

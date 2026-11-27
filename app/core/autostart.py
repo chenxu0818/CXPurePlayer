@@ -14,6 +14,11 @@ APP_NAME = "CXPurePlayer"
 _RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 
+def is_supported() -> bool:
+    """仅 Windows 支持注册表开机自启动。"""
+    return os.name == "nt"
+
+
 def _exe_command() -> str:
     """生成开机自启动命令行。"""
     if getattr(sys, "frozen", False):

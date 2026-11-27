@@ -89,6 +89,9 @@ def test_cancel_stale_worker() -> None:
 
 
 def test_live_stream_ui(app) -> None:
+    if os.environ.get("QT_QPA_PLATFORM", "").lower() == "offscreen":
+        print("SKIP: offscreen 无界面环境无法嵌入 libmpv 原生窗口，跳过真实直播流测试")
+        return
     if not shutil.which("ffmpeg"):
         print("SKIP: 未找到 ffmpeg，跳过真实直播流测试")
         return

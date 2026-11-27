@@ -27,6 +27,17 @@ def resource_root() -> str:
     return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+def user_data_root() -> str:
+    """可写用户数据目录：Windows 保持 EXE 同目录，macOS 使用 Application Support。"""
+    if sys.platform == "darwin" and getattr(sys, "frozen", False):
+        base = os.path.join(
+            os.path.expanduser("~"), "Library", "Application Support", APP_NAME
+        )
+        os.makedirs(base, exist_ok=True)
+        return base
+    return app_root()
+
+
 def ensure_bin_path() -> str:
     """把随包 bin 目录加入 PATH / DLL 搜索路径，使 python-mpv 能找到 libmpv-2.dll。
 
@@ -37,6 +48,14 @@ def ensure_bin_path() -> str:
     candidates = [primary]
     if getattr(sys, "frozen", False):
         candidates.append(os.path.join(app_root(), "bin"))
+    if sys.platform == "darwin":
+        # python-mpv 在非 Windows 平台用 ctypes.util.find_library 查找 libmpv。
+        # macOS 的 dyld 会读取 DYLD_LIBRARY_PATH / DYLD_FALLBACK_LIBRARY_PATH。
+        for directory in candidates:
+            for env_name in ("DYLD_LIBRARY_PATH", "DYLD_FALLBACK_LIBRARY_PATH"):
+                existing = [p for p in os.environ.get(env_name, "").split(os.pathsep) if p]
+                if os.path.normpath(directory) not in {os.path.normpath(p) for p in existing}:
+                    os.environ[env_name] = os.pathsep.join([directory, *existing])
     current = [p for p in os.environ.get("PATH", "").split(os.pathsep) if p]
     for directory in candidates:
         if not os.path.isdir(directory):
@@ -66,7 +85,7 @@ def _writable(path: str) -> bool:
 
 def default_record_dir() -> str:
     """录制默认目录：<APP_ROOT>/record；不可写时回退 LOCALAPPDATA。"""
-    primary = os.path.join(app_root(), "record")
+    primary = os.path.join(user_data_root(), "record")
     if _writable(primary):
         return primary
     fallback = os.path.join(
@@ -97,7 +116,7 @@ class AppSettings:
     }
 
     def __init__(self) -> None:
-        self._q = QSettings(os.path.join(app_root(), "settings.ini"), QSettings.Format.IniFormat)
+        self._q = QSettings(os.path.join(user_data_root(), "settings.ini"), QSettings.Format.IniFormat)
 
     def get(self, key: str, default=None):
         fallback = self.DEFAULTS.get(key, default) if default is None else default

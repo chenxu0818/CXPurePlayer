@@ -6,6 +6,8 @@ import os
 import tempfile
 from typing import Dict, Optional
 
+from .ui_scale import ui_font_family
+
 THEMES: Dict[str, dict] = {
     "default": {
         "name": "星夜蓝",
@@ -150,7 +152,7 @@ def _starfield_image() -> str:
 _CSS = """
 QWidget {{
     background: @bg@; color: @text@;
-    font-family: 'Microsoft YaHei', 'PingFang SC', 'Segoe UI', sans-serif;
+    font-family: '@font_family@', 'Segoe UI', sans-serif;
     font-size: @fs@px;
 }}
 QWidget#root {{ background: @bg@; }}
@@ -373,6 +375,7 @@ def build_stylesheet(code: Optional[str] = None, metrics=None) -> str:
         "ind": px(15), "slider": px(5), "handle": px(13), "handlegap": px(5),
         "volw": px(84), "voll": px(46), "progressh": px(16), "scroll": px(9),
         "star": star_css,
+        "font_family": ui_font_family(),
     }
     css = _CSS
     for name, value in replacements.items():

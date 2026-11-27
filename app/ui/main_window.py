@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import ctypes
 import os
 import subprocess
 import sys
-from ctypes import wintypes
 from typing import List, Optional
 
 from PySide6.QtCore import (
@@ -31,7 +29,7 @@ from ..core.models import Channel, MediaInfo, RecordTask, TaskStatus, format_spe
 from ..core.m3u_parser import export_m3u, parse_m3u
 from ..core.mpv_player import MpvPlayer
 from ..core.recorder import Recorder
-from ..core.settings import AppSettings, app_root
+from ..core.settings import AppSettings, user_data_root
 from ..core.theme import apply_theme, palette
 from ..core import ui_scale as uiscale
 from ..version import APP_VERSION
@@ -50,27 +48,6 @@ from .record_dialog import RecordDialog, RecordTasksDialog
 from .screenshot_dialogs import ContinuousDialog, ThumbnailDialog
 from .settings_dialog import SettingsDialog
 from .widget_utils import app_pixmap, auto_retranslate, mark_dynamic, set_window_icon, translate_standard_buttons
-
-# Windows 原生无边框窗口缩放：靠 WM_NCHITTEST 让系统识别四边/四角并给出 resize 光标，
-# WM_SIZING 中按视频宽高比约束矩形。比自绘透明拖拽条更稳，且与自定义标题栏拖动共存。
-WM_NCHITTEST = 0x0084
-WM_SIZING = 0x0214
-HTCLIENT = 1
-HTCAPTION = 2
-HTLEFT, HTRIGHT = 10, 11
-HTTOP, HTTOPLEFT, HTTOPRIGHT = 12, 13, 14
-HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMRIGHT = 15, 16, 17
-WMSZ_LEFT, WMSZ_RIGHT = 1, 2
-WMSZ_TOP, WMSZ_TOPLEFT, WMSZ_TOPRIGHT = 3, 4, 5
-WMSZ_BOTTOM, WMSZ_BOTTOMLEFT, WMSZ_BOTTOMRIGHT = 6, 7, 8
-
-
-class _RECT(ctypes.Structure):
-    _fields_ = [
-        ("left", wintypes.LONG), ("top", wintypes.LONG),
-        ("right", wintypes.LONG), ("bottom", wintypes.LONG),
-    ]
-
 
 class SeekSlider(QSlider):
     """进度条：点击任意位置直接跳转，拖拽同样按绝对位置定位。"""
@@ -395,6 +372,9 @@ class MainWindow(QMainWindow):
         self.title_bar = TitleBar(self, self.metrics)
         outer.addWidget(self.title_bar)
         self._menubar = QMenuBar()
+        # macOS 默认把 QMenuBar 放到屏幕顶部；本程序是自定义无边框窗口，菜单需留在窗口内。
+        if hasattr(self._menubar, "setNativeMenuBar"):
+            self._menubar.setNativeMenuBar(False)
         outer.addWidget(self._menubar)
 
         self.player_widget = PlayerWidget(self.metrics)
@@ -1230,7 +1210,7 @@ class MainWindow(QMainWindow):
         # 默认文件名带视频名前缀与截图时间戳；核心检测到时间戳后不会重复添加
         default = f"{name}_snapshot_{_stamp()}.png"
         path, _ = get_save_file(
-            self, tr("选择保存位置"), os.path.join(app_root(), default),
+            self, tr("选择保存位置"), os.path.join(user_data_root(), default),
             tr("图片 (*.png)"), self.metrics,
         )
         if path:
@@ -1306,7 +1286,7 @@ class MainWindow(QMainWindow):
 
     def _export_channels(self) -> None:
         path, _ = get_save_file(
-            self, tr("导出频道列表"), os.path.join(app_root(), "channels.m3u"),
+            self, tr("导出频道列表"), os.path.join(user_data_root(), "channels.m3u"),
             tr("M3U (*.m3u)"), self.metrics,
         )
         if path:

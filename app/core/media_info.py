@@ -16,6 +16,8 @@ from .settings import resource_root
 FFPROBE_CANDIDATES = [
     os.path.join(resource_root(), "bin", "ffprobe.exe"),
     os.path.join(resource_root(), "bin", "ffprobe"),
+    "/opt/homebrew/bin/ffprobe",
+    "/usr/local/bin/ffprobe",
     "ffprobe",
 ]
 
