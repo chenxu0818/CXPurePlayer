@@ -16,6 +16,31 @@ from .settings import ensure_bin_path, resource_root
 _BIN_DIR = ensure_bin_path()
 
 
+def mpv_init_options(wid: int, vo: str = "gpu") -> dict:
+    """生成 mpv 初始化参数。
+
+    macOS 上把 NSView 句柄作为 wid 传给 libmpv 会在真正创建视频输出时崩溃。
+    因此 macOS 改用 vo=libmpv，由 QOpenGLWidget 的 MpvRenderContext 负责渲染，
+    不再传 wid；Windows / Linux 保持原有的窗口嵌入方式。
+    """
+    options: dict = {
+        "vo": "libmpv" if sys.platform == "darwin" else vo,
+        "hwdec": "auto-safe",
+        "input_default_bindings": False,
+        "input_vo_keyboard": False,
+        "input_cursor": False,
+        "osc": False,
+        "osd_level": 0,
+        "keep_open": "no",
+        "force_window": "no",
+        "terminal": False,
+        "msg_level": "all=warn",
+    }
+    if sys.platform != "darwin":
+        options["wid"] = str(int(wid))
+    return options
+
+
 class MpvPlayer(QObject):
     """所有 mpv 调用集中在此；mpv 线程回调通过 Qt Signal 切回 GUI 线程。"""
 
@@ -42,6 +67,8 @@ class MpvPlayer(QObject):
         self._external_sub: List[TrackInfo] = []
         self._external_audio_index = 0
         self._external_sub_index = 0
+        # macOS 的 vo=libmpv 渲染上下文，由 QOpenGLWidget 创建并驱动。
+        self._render_ctx = None
 
     @staticmethod
     def _log_dll_diagnostics(exc: Exception) -> None:
@@ -171,20 +198,7 @@ class MpvPlayer(QObject):
             self.readyChanged.emit(False)
             return False
         try:
-            self._mpv = mpv.MPV(
-                wid=str(int(wid)),
-                vo=vo,
-                hwdec="auto-safe",
-                input_default_bindings=False,
-                input_vo_keyboard=False,
-                input_cursor=False,
-                osc=False,
-                osd_level=0,
-                keep_open="no",
-                force_window="no",
-                terminal=False,
-                msg_level="all=warn",
-            )
+            self._mpv = mpv.MPV(**mpv_init_options(self._wid, vo))
             self._mpv.observe_property("time-pos", self._on_time_pos)
             self._mpv.observe_property("duration", self._on_duration)
             self._mpv.observe_property("pause", self._on_pause)
@@ -207,7 +221,57 @@ class MpvPlayer(QObject):
             self.readyChanged.emit(False)
             return False
 
+    # ---------- macOS / libmpv OpenGL 渲染上下文 ----------
+    def create_render_context(self, get_proc_address) -> bool:
+        """由 QOpenGLWidget 在 initializeGL 中调用，创建 libmpv 渲染上下文。"""
+        if self._render_ctx is not None:
+            return True
+        if self._mpv is None:
+            return False
+        try:
+            import mpv  # type: ignore
+            wrapper = mpv.MpvGlGetProcAddressFn(get_proc_address)
+            self._render_ctx = mpv.MpvRenderContext(
+                self._mpv,
+                "opengl",
+                opengl_init_params={"get_proc_address": wrapper},
+            )
+            log_info("libmpv 渲染上下文创建成功")
+            return True
+        except Exception as exc:
+            log_error(f"libmpv 渲染上下文创建失败: {exc}")
+            return False
+
+    def set_render_update_callback(self, callback) -> None:
+        if self._render_ctx is not None:
+            self._render_ctx.update_cb = callback
+
+    def render_frame(self, width: int, height: int, fbo: int) -> None:
+        """在 QOpenGLWidget.paintGL 中渲染一帧（调用方必须持有当前 GL 上下文）。"""
+        ctx = self._render_ctx
+        if ctx is None:
+            return
+        try:
+            ctx.render(
+                flip_y=True,
+                opengl_fbo={"w": int(width), "h": int(height), "fbo": int(fbo)},
+            )
+            ctx.report_swap()
+        except Exception as exc:
+            log_error(f"libmpv 渲染失败: {exc}")
+
+    def free_render_context(self) -> None:
+        ctx = self._render_ctx
+        if ctx is None:
+            return
+        try:
+            ctx.free()
+        except Exception:
+            pass
+        self._render_ctx = None
+
     def shutdown(self) -> None:
+        self.free_render_context()
         if self._mpv is not None:
             try:
                 self._mpv.terminate()

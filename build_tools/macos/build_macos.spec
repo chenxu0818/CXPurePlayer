@@ -59,7 +59,7 @@ excludes = [
     'PySide6.QtDesigner', 'PySide6.QtHelp', 'PySide6.QtMultimedia', 'PySide6.QtNetwork',
     'PySide6.QtBluetooth', 'PySide6.QtNfc', 'PySide6.QtPositioning', 'PySide6.QtSensors',
     'PySide6.QtSerialPort', 'PySide6.QtSql', 'PySide6.QtTest', 'PySide6.QtSvg',
-    'PySide6.QtOpenGL', 'PySide6.QtOpenGLWidgets', 'PySide6.QtUiTools', 'PySide6.QtXml',
+    'PySide6.QtUiTools', 'PySide6.QtXml',
     'tkinter', 'matplotlib', 'numpy', 'PIL', 'scipy', 'pytest', 'unittest',
 ]
 
@@ -68,7 +68,7 @@ a = Analysis(
     pathex=[_ROOT],
     binaries=binaries,
     datas=datas,
-    hiddenimports=['mpv'],
+    hiddenimports=['mpv', 'PySide6.QtOpenGLWidgets'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

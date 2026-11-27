@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 
+from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import QApplication
 
 from app.core import ui_scale
@@ -18,6 +19,11 @@ from app.version import APP_DISPLAY, APP_VERSION
 
 def main() -> int:
     ui_scale.configure_high_dpi()
+    # macOS 默认把 QMenuBar 放到屏幕顶部；必须在 QApplication 创建前声明，
+    # 否则无边框窗口内的菜单栏会被 Qt 当作原生菜单隐藏。
+    QCoreApplication.setAttribute(
+        Qt.ApplicationAttribute.AA_DontUseNativeMenuBar, True
+    )
     app = QApplication(sys.argv)
     app.setApplicationName("CXPurePlayer")
     app.setApplicationVersion(APP_VERSION)

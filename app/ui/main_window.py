@@ -42,6 +42,9 @@ from .icons import icon
 from .iptv_panel import IptvPanel
 from .osd_overlay import OsdOverlay
 from .player_widget import PlayerWidget
+
+if sys.platform == "darwin":
+    from .mpv_render_widget import MpvRenderWidget
 from .playlist_panel import PlaylistPanel
 from .properties_dialog import PropertiesDialog
 from .record_dialog import RecordDialog, RecordTasksDialog
@@ -312,6 +315,8 @@ class MainWindow(QMainWindow):
         # 命令行/文件关联传入的待播文件：mpv 内核延迟到事件循环首轮初始化，
         # 故先入队，等 readyChanged(True) 后再真正打开，避免竞态导致有标题无画面。
         self._pending_launch_files: list[str] = []
+        # macOS 的 libmpv 渲染上下文要等 QOpenGLWidget 初始化完成后才可播放。
+        self._render_ready = sys.platform != "darwin"
         self._fullscreen = False
         self._normal_geometry = None
         self._was_maximized_before_fullscreen = False
@@ -371,13 +376,18 @@ class MainWindow(QMainWindow):
 
         self.title_bar = TitleBar(self, self.metrics)
         outer.addWidget(self.title_bar)
-        self._menubar = QMenuBar()
+        self._menubar = QMenuBar(central)
         # macOS 默认把 QMenuBar 放到屏幕顶部；本程序是自定义无边框窗口，菜单需留在窗口内。
         if hasattr(self._menubar, "setNativeMenuBar"):
             self._menubar.setNativeMenuBar(False)
+        if sys.platform == "darwin":
+            self._menubar.setMinimumHeight(self.metrics.s(22))
         outer.addWidget(self._menubar)
 
-        self.player_widget = PlayerWidget(self.metrics)
+        if sys.platform == "darwin":
+            self.player_widget = MpvRenderWidget(self.metrics, self.player)
+        else:
+            self.player_widget = PlayerWidget(self.metrics)
         outer.addWidget(self.player_widget, 1)
 
         self.osd = OsdOverlay(self.metrics, self.player_widget)
@@ -558,6 +568,8 @@ class MainWindow(QMainWindow):
         self.player_widget.wheelVolume.connect(
             lambda delta: self.player.set_volume(self.player.state.volume + delta)
         )
+        if sys.platform == "darwin":
+            self.player_widget.renderReady.connect(self._on_render_ready)
         self.progress.sliderPressed.connect(self._on_scrub_started)
         self.progress.sliderReleased.connect(self._on_scrub_finished)
 
@@ -1009,6 +1021,13 @@ class MainWindow(QMainWindow):
         if ready:
             self._update_status(tr("libmpv 就绪"))
             log_info("[启动] libmpv readyChanged(True)")
+            if self._render_ready:
+                self._flush_pending_launch()
+
+    def _on_render_ready(self) -> None:
+        """macOS 的 OpenGL 渲染上下文就绪后才允许播放命令行传入的文件。"""
+        self._render_ready = True
+        if self.player.available:
             self._flush_pending_launch()
 
     def _on_state(self, state) -> None:

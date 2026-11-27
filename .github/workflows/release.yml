@@ -182,6 +182,7 @@ jobs:
             - macOS 11+ 应用包：分别提供 Apple Silicon（arm64）与 Intel（x86_64）DMG
             - macOS 包内置 LGPL libmpv 动态库及依赖许可证；未做 Apple 公证，首次打开可按系统提示右键选择「打开」
             - 完整功能与操作说明见仓库 README.md
+          overwrite_files: true
           files: |
             artifacts/windows-exe/*.exe
             artifacts/macos-*/*.dmg

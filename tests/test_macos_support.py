@@ -5,6 +5,7 @@ import os
 import sys
 
 from app.core import autostart
+from app.core import mpv_player as mpv_player_mod
 from app.core import settings as settings_mod
 from app.core import ui_scale as ui_scale_mod
 from app.core.settings import user_data_root
@@ -41,6 +42,20 @@ def test_user_data_root_macos_frozen_uses_application_support(monkeypatch, tmp_p
     expected = os.path.join(str(tmp_path), "Library", "Application Support", "CXPurePlayer")
     assert user_data_root() == expected
     assert os.path.isdir(expected)
+
+
+def test_mpv_init_options_macos_does_not_pass_wid(monkeypatch) -> None:
+    monkeypatch.setattr(mpv_player_mod.sys, "platform", "darwin")
+    options = mpv_player_mod.mpv_init_options(12345, "gpu")
+    assert "wid" not in options
+    assert options["vo"] == "libmpv"
+
+
+def test_mpv_init_options_windows_keeps_embedded_wid(monkeypatch) -> None:
+    monkeypatch.setattr(mpv_player_mod.sys, "platform", "win32")
+    options = mpv_player_mod.mpv_init_options(12345, "gpu")
+    assert options["wid"] == "12345"
+    assert options["vo"] == "gpu"
 
 
 def test_ui_font_family_switches_on_macos(monkeypatch) -> None:
